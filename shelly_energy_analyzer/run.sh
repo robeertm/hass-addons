@@ -2,62 +2,37 @@
 set -e
 
 CFG=/data/config.json
+OPTS=/data/options.json
 DATA_DIR=/data
 
 bashio::log.info "Shelly Energy Analyzer add-on starting (v${ANALYZER_VERSION})"
+bashio::log.info "Raw options snapshot (passwords redacted):"
+jq 'walk(if type == "object" and (has("password")) then .password = (if (.password // "") == "" then "" else "***" end) else . end)' "${OPTS}"
 
-# --- Resolve MQTT defaults from HA services if not overridden ---
-MQTT_ENABLED="$(bashio::config 'mqtt.enabled')"
-MQTT_BROKER="$(bashio::config 'mqtt.broker')"
-MQTT_PORT="$(bashio::config 'mqtt.port')"
-MQTT_USER="$(bashio::config 'mqtt.username')"
-MQTT_PASS="$(bashio::config 'mqtt.password')"
-
-if [ "${MQTT_ENABLED}" = "true" ] && bashio::services.available "mqtt"; then
-  if [ -z "${MQTT_USER}" ]; then
+# --- Pull MQTT credentials from HA's MQTT service registry if user left them blank ---
+MQTT_USER=""
+MQTT_PASS=""
+if [ "$(jq -r '.mqtt.enabled // false' "${OPTS}")" = "true" ] && bashio::services.available "mqtt"; then
+  if [ "$(jq -r '.mqtt.username // ""' "${OPTS}")" = "" ]; then
     MQTT_USER="$(bashio::services 'mqtt' 'username')"
-    bashio::log.info "Using MQTT username from HA services: ${MQTT_USER}"
+    bashio::log.info "Pulling MQTT username from HA services: ${MQTT_USER}"
   fi
-  if [ -z "${MQTT_PASS}" ]; then
+  if [ "$(jq -r '.mqtt.password // ""' "${OPTS}")" = "" ]; then
     MQTT_PASS="$(bashio::services 'mqtt' 'password')"
-    bashio::log.info "Using MQTT password from HA services"
+    bashio::log.info "Pulling MQTT password from HA services"
   fi
 fi
 
-# --- Build config.json from add-on options ---
-bashio::log.info "Rendering ${CFG} from add-on options..."
+# --- Render config.json directly from /data/options.json via jq ---
+bashio::log.info "Rendering ${CFG} from /data/options.json..."
 
-DEVICES_JSON="$(bashio::config 'devices')"
-LANG_VAL="$(bashio::config 'ui.language')"
-POLL_VAL="$(bashio::config 'ui.live_poll_seconds')"
-WIN_VAL="$(bashio::config 'ui.live_window_minutes')"
-RET_VAL="$(bashio::config 'ui.live_retention_minutes')"
-PRICE_VAL="$(bashio::config 'electricity_price_eur_per_kwh')"
-TOPIC_PREFIX="$(bashio::config 'mqtt.topic_prefix')"
-HA_DISC="$(bashio::config 'mqtt.ha_discovery')"
-HA_DISC_PREFIX="$(bashio::config 'mqtt.ha_discovery_prefix')"
-PUB_INT="$(bashio::config 'mqtt.publish_interval_seconds')"
-
-jq -n \
+jq \
   --arg version "${ANALYZER_VERSION}" \
-  --argjson devices "${DEVICES_JSON}" \
-  --arg lang "${LANG_VAL}" \
-  --argjson poll "${POLL_VAL}" \
-  --argjson win "${WIN_VAL}" \
-  --argjson ret "${RET_VAL}" \
-  --argjson price "${PRICE_VAL}" \
-  --argjson mqtt_enabled "${MQTT_ENABLED}" \
-  --arg mqtt_broker "${MQTT_BROKER}" \
-  --argjson mqtt_port "${MQTT_PORT}" \
-  --arg mqtt_user "${MQTT_USER}" \
-  --arg mqtt_pass "${MQTT_PASS}" \
-  --arg mqtt_topic "${TOPIC_PREFIX}" \
-  --argjson mqtt_disc "${HA_DISC}" \
-  --arg mqtt_disc_prefix "${HA_DISC_PREFIX}" \
-  --argjson mqtt_pub_int "${PUB_INT}" \
+  --arg fallback_mqtt_user "${MQTT_USER}" \
+  --arg fallback_mqtt_pass "${MQTT_PASS}" \
   '{
     version: $version,
-    devices: $devices,
+    devices: (.devices // []),
     download: {
       chunk_seconds: 43200,
       overlap_seconds: 60,
@@ -71,11 +46,11 @@ jq -n \
       remove_merged: false
     },
     ui: {
-      live_poll_seconds: $poll,
+      live_poll_seconds: (.ui.live_poll_seconds // 1.0),
       plot_redraw_seconds: 0.5,
-      live_window_minutes: $win,
-      live_retention_minutes: $ret,
-      language: $lang,
+      live_window_minutes: (.ui.live_window_minutes // 10),
+      live_retention_minutes: (.ui.live_retention_minutes // 120),
+      language: (.ui.language // "de"),
       plot_theme_mode: "auto",
       live_web_enabled: true,
       live_web_port: 8765,
@@ -86,27 +61,27 @@ jq -n \
       autosync_mode: "incremental"
     },
     pricing: {
-      electricity_price_eur_per_kwh: $price,
+      electricity_price_eur_per_kwh: (.electricity_price_eur_per_kwh // 0.30),
       price_includes_vat: true,
       vat_enabled: true,
       vat_rate_percent: 19.0
     },
     mqtt: {
-      enabled: $mqtt_enabled,
-      broker: $mqtt_broker,
-      port: $mqtt_port,
-      username: $mqtt_user,
-      password: $mqtt_pass,
-      topic_prefix: $mqtt_topic,
-      ha_discovery: $mqtt_disc,
-      ha_discovery_prefix: $mqtt_disc_prefix,
-      publish_interval_seconds: $mqtt_pub_int,
+      enabled: (.mqtt.enabled // false),
+      broker: (.mqtt.broker // "core-mosquitto"),
+      port: (.mqtt.port // 1883),
+      username: (if (.mqtt.username // "") == "" then $fallback_mqtt_user else .mqtt.username end),
+      password: (if (.mqtt.password // "") == "" then $fallback_mqtt_pass else .mqtt.password end),
+      topic_prefix: (.mqtt.topic_prefix // "shelly_analyzer"),
+      ha_discovery: (.mqtt.ha_discovery // true),
+      ha_discovery_prefix: (.mqtt.ha_discovery_prefix // "homeassistant"),
+      publish_interval_seconds: (.mqtt.publish_interval_seconds // 10),
       use_tls: false
     }
-  }' > "${CFG}"
+  }' "${OPTS}" > "${CFG}"
 
-bashio::log.info "Effective config (secrets redacted):"
-jq 'del(.mqtt.password) | .mqtt.password = (if (.mqtt.password // "") == "" then "" else "***" end)' "${CFG}"
+bashio::log.info "Rendered config.json (passwords redacted):"
+jq 'walk(if type == "object" and (has("password")) then .password = (if (.password // "") == "" then "" else "***" end) else . end)' "${CFG}"
 
 # --- Run analyzer ---
 cd "${DATA_DIR}"
