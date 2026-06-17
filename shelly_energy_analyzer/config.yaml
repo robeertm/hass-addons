@@ -1,5 +1,5 @@
 name: Shelly Energy Analyzer
-version: "16.41.4"
+version: "16.41.4-1"
 slug: shelly_energy_analyzer
 description: Self-hosted Shelly EM/3EM energy monitoring, cost tracking, MQTT/HA discovery, PV/Solar, dynamic spot prices
 url: https://github.com/robeertm/shelly-energy-analyzer
