@@ -1,0 +1,95 @@
+name: sync-upstream-version
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream-version
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Resolve versions
+        id: ver
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          current=$(grep -E '^version:' shelly_energy_analyzer/config.yaml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          latest_raw=$(gh api -H "Accept: application/vnd.github+json" \
+            repos/robeertm/shelly-energy-analyzer/releases/latest --jq '.tag_name')
+          latest="${latest_raw#v}"
+          echo "current=$current"  | tee -a "$GITHUB_OUTPUT"
+          echo "latest=$latest"    | tee -a "$GITHUB_OUTPUT"
+          if [ "$current" = "$latest" ]; then
+            echo "changed=false"   | tee -a "$GITHUB_OUTPUT"
+          else
+            echo "changed=true"    | tee -a "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fetch release notes
+        if: steps.ver.outputs.changed == 'true'
+        id: notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          body=$(gh api -H "Accept: application/vnd.github+json" \
+            "repos/robeertm/shelly-energy-analyzer/releases/tags/v${{ steps.ver.outputs.latest }}" \
+            --jq '.body // ""')
+          {
+            echo "body<<EOF_BODY"
+            echo "$body"
+            echo "EOF_BODY"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Bump add-on files
+        if: steps.ver.outputs.changed == 'true'
+        env:
+          OLD: ${{ steps.ver.outputs.current }}
+          NEW: ${{ steps.ver.outputs.latest }}
+          BODY: ${{ steps.notes.outputs.body }}
+        run: |
+          set -euo pipefail
+          # config.yaml: version: "X" -> version: "Y"
+          sed -i -E "s/^(version:[[:space:]]*)\"${OLD}\"/\1\"${NEW}\"/" shelly_energy_analyzer/config.yaml
+          # build.yaml: ANALYZER_VERSION: "X" -> "Y"
+          sed -i -E "s/(ANALYZER_VERSION:[[:space:]]*)\"${OLD}\"/\1\"${NEW}\"/" shelly_energy_analyzer/build.yaml
+
+          # Sanity-check both files now match $NEW
+          grep -q "\"${NEW}\"" shelly_energy_analyzer/config.yaml
+          grep -q "\"${NEW}\"" shelly_energy_analyzer/build.yaml
+
+          # Prepend changelog entry
+          tmp=$(mktemp)
+          {
+            echo "## ${NEW} - $(date -u +%Y-%m-%d)"
+            echo
+            if [ -n "$BODY" ]; then echo "$BODY"; else echo "Upstream release v${NEW}."; fi
+            echo
+            if [ -f shelly_energy_analyzer/CHANGELOG.md ]; then cat shelly_energy_analyzer/CHANGELOG.md; fi
+          } > "$tmp"
+          mv "$tmp" shelly_energy_analyzer/CHANGELOG.md
+
+      - name: Commit & push
+        if: steps.ver.outputs.changed == 'true'
+        env:
+          NEW: ${{ steps.ver.outputs.latest }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add shelly_energy_analyzer/config.yaml \
+                  shelly_energy_analyzer/build.yaml  \
+                  shelly_energy_analyzer/CHANGELOG.md
+          git commit -m "chore(shelly_energy_analyzer): bump to ${NEW}"
+          git push
