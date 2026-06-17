@@ -1,5 +1,5 @@
 name: Shelly Energy Analyzer
-version: "16.41.4-1"
+version: "16.41.5"
 slug: shelly_energy_analyzer
 description: Self-hosted Shelly EM/3EM energy monitoring, cost tracking, MQTT/HA discovery, PV/Solar, dynamic spot prices
 url: https://github.com/robeertm/shelly-energy-analyzer
@@ -17,6 +17,7 @@ homeassistant_api: false
 host_network: false
 ingress: false
 panel_icon: mdi:flash
+webui: http://[HOST]:[PORT:8765]
 ports:
   "8765/tcp": 8765
 ports_description:

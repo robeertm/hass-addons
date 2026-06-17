@@ -4,7 +4,7 @@ build_from:
   armv7: ghcr.io/home-assistant/armv7-base-debian:bookworm
   armhf: ghcr.io/home-assistant/armhf-base-debian:bookworm
 args:
-  ANALYZER_VERSION: "16.41.4"
+  ANALYZER_VERSION: "16.41.5"
 labels:
   org.opencontainers.image.title: "Shelly Energy Analyzer"
   org.opencontainers.image.description: "Self-hosted Shelly EM/3EM energy monitoring"
