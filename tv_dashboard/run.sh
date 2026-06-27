@@ -22,8 +22,8 @@ else
   export HA_TOKEN="${SUPERVISOR_TOKEN:-}"
 fi
 
-echo "[run] profile=$PROFILE refresh=${REFRESH}s rotate=${ROTATE}s"
-echo "[run] HA_BASE_URL=$HA_BASE_URL"
+echo "[run] tv_dashboard v1.0.2 profile=$PROFILE refresh=${REFRESH}s rotate=${ROTATE}s"
+echo "[run] HA_BASE_URL=$HA_BASE_URL TOKEN_LEN=${#HA_TOKEN}"
 
 cd /app
 exec gunicorn -w 2 --threads 4 -b 0.0.0.0:8765 app:app
