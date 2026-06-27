@@ -1,3 +1,14 @@
+## 1.0.3 (2026-06-27)
+
+- Mike-Profil: Wetterstation-Entities erweitert (Wind, Regen, Luftdruck, Außen-Luftfeuchte, Indoor-CO₂/Lärm)
+- Mike-Profil: Außentemp-Historie auf Netatmo Outdoor-Modul gefixt (war auf nicht existierender `sensor.aussentemperatur`)
+- Mike-Profil: 13 Batterien aus realem Inventar (Netatmo Outdoor/Regen/Wind, Roborock, 3 Rauchmelder, Wasserwarner, Treppe Motion, …)
+- Wetter-Page: Wind / Regen / Luftdruck / Außen-Luftfeuchte Mini-Tiles statt leerem Whitespace
+- Status-Page: für Mike Wetterstation-Tile (Wind/Regen/CO₂/Lärm) statt nicht existierender Thread-Mesh-RSSI
+- Data-driven Tile-Hide: `tile-needs-data` blendet leere Kacheln aus (Urlaub, Thread, leere Wetter-Sensoren)
+- Page-Rotation Default 22s → 10s ("lebender" wirken)
+- Outdoor-Temperatur Hover-History liest jetzt korrekt das jeweils profil-konfigurierte Outdoor-Entity
+
 ## 1.0.0 (2026-06-27)
 
 Initial release.

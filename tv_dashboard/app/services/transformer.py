@@ -269,6 +269,16 @@ def transform(snapshot):
         "humidity": _safe_float(_state(snapshot, ENTITIES.get("indoor_humidity", "")), None),
         "pressure": _safe_float(_state(snapshot, ENTITIES.get("pressure", "")), None),
         "grid_co2": _safe_float(_state(snapshot, ENTITIES.get("grid_co2", "")), None),
+        "co2": _safe_float(_state(snapshot, ENTITIES.get("indoor_co2", "")), None),
+        "noise": _safe_float(_state(snapshot, ENTITIES.get("indoor_noise", "")), None),
+    }
+
+    weather_extra = {
+        "outdoor_humidity": _safe_float(_state(snapshot, ENTITIES.get("outdoor_humidity", "")), None),
+        "wind_speed": _safe_float(_state(snapshot, ENTITIES.get("wind_speed", "")), None),
+        "wind_dir": _state(snapshot, ENTITIES.get("wind_dir", "")),
+        "rain_now": _safe_float(_state(snapshot, ENTITIES.get("rain_now", "")), None),
+        "rain_today": _safe_float(_state(snapshot, ENTITIES.get("rain_today", "")), None),
     }
 
     events = []
@@ -328,7 +338,7 @@ def transform(snapshot):
     batteries.sort(key=lambda b: b["value"])
 
     histories = snapshot.get("histories", {})
-    outdoor_history = histories.get("sensor.aussentemperatur", [])
+    outdoor_history = histories.get(ENTITIES.get("outdoor_temp", ""), []) or histories.get("sensor.aussentemperatur", [])
     rooms_history = {}
     for room in rooms:
         eid_key = None
@@ -440,6 +450,7 @@ def transform(snapshot):
             "is_night": is_night,
             "sun_rise": sun_rise.astimezone().isoformat() if sun_rise else None,
             "sun_set": sun_set.astimezone().isoformat() if sun_set else None,
+            **weather_extra,
         },
         "forecast": forecast,
         "persons": persons,

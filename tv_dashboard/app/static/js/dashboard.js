@@ -280,12 +280,14 @@ function renderGarbage(garbage) {
 function renderVacation(v) {
   const labelEl = document.getElementById('vacation-label');
   if (!v) {
+    markMissing('vacation');
     if (labelEl) labelEl.textContent = 'kein Urlaub geplant';
     setNum('vacation-days', '—');
     document.getElementById('vacation-range').textContent = '';
     document.getElementById('vacation-bar-fill').style.width = '0%';
     return;
   }
+  markHave('vacation');
   labelEl.textContent = v.label;
   setNum('vacation-days', v.active ? '✈︎' : String(v.days_until));
   const start = fmtDate(v.start), end = fmtDate(v.end);
@@ -307,11 +309,48 @@ function renderWeather(o) {
   setWeatherIcon(o.raw, o.is_night);
   updateSunArc(o.sun_rise, o.sun_set);
   if (window.bgSetMode) window.bgSetMode(o.raw, o.is_night);
+
+  if (o.outdoor_humidity != null) {
+    setNum('outdoor-humid', String(Math.round(o.outdoor_humidity)));
+    markHave('outdoor-humid');
+  }
+  if (o.wind_speed != null) {
+    setNum('wind-speed', o.wind_speed.toFixed(1));
+    const dir = (o.wind_dir || '').toString().toUpperCase();
+    const ARROW = { N: '↑', NE: '↗', E: '→', SE: '↘', S: '↓', SW: '↙', W: '←', NW: '↖' };
+    const arrow = ARROW[dir] || '·';
+    const lbl = document.getElementById('wind-dir-label');
+    if (lbl) lbl.textContent = `${arrow} ${dir || '—'}`;
+    markHave('wind');
+  }
+  if (o.rain_today != null) {
+    setNum('rain-today', o.rain_today.toFixed(1));
+    const lbl = document.getElementById('rain-now-label');
+    if (lbl) lbl.textContent = (o.rain_now != null && o.rain_now > 0) ? `regnet ${o.rain_now.toFixed(1)} mm/h` : 'trocken';
+    markHave('rain');
+  }
+}
+
+function markHave(needName) {
+  document.querySelectorAll(`[data-need="${needName}"]`).forEach(el => el.classList.remove('tile-empty'));
+}
+function markMissing(needName) {
+  document.querySelectorAll(`[data-need="${needName}"]`).forEach(el => el.classList.add('tile-empty'));
 }
 
 function renderIndoor(ind) {
   if (ind.humidity != null) setNum('indoor-hum', ind.humidity.toFixed(0));
-  if (ind.pressure != null) setNum('indoor-pressure', ind.pressure.toFixed(0));
+  if (ind.pressure != null) {
+    setNum('indoor-pressure', ind.pressure.toFixed(0));
+    setNum('pressure', ind.pressure.toFixed(0));
+    const trend = document.getElementById('pressure-trend');
+    if (trend) trend.textContent = ind.pressure > 1020 ? 'Hoch' : ind.pressure < 1005 ? 'Tief' : 'Normal';
+    markHave('pressure');
+  } else {
+    markMissing('pressure');
+  }
+  if (ind.co2 != null) setNum('status-co2', String(Math.round(ind.co2)));
+  if (ind.noise != null) setNum('status-noise', String(Math.round(ind.noise)));
   if (ind.grid_co2 != null) {
     const v = Math.round(ind.grid_co2);
     setNum('grid-co2', String(v));
@@ -446,6 +485,7 @@ function applyData(data) {
   renderOutdoorChart(data.outdoor_history || [], data.outdoor);
   renderSunDetail(data.outdoor, data.sun_elevation, data.sun_azimuth);
   renderForecastBigRow(data.forecast);
+  renderIndoor(data.indoor || {});
 
   renderEnergyBig(data.power);
   renderCO2Big(data.co2_rate, data.co2_kumuliert, data.indoor);
@@ -460,6 +500,7 @@ function applyData(data) {
   renderInternet(data.internet);
   renderSolar(data.solar);
   renderPool(data.pool);
+  renderStatusWeather(data.outdoor);
 }
 
 function renderSolar(s) {
@@ -807,8 +848,11 @@ function renderBatteries(batteries) {
 }
 
 function renderThread(rssi) {
-  if (!rssi) return;
+  if (!rssi) { markMissing('thread'); return; }
   const ids = ['best', 'avg', 'worst'];
+  const anyVal = ids.some(k => rssi[k] != null);
+  if (!anyVal) { markMissing('thread'); return; }
+  markHave('thread');
   ids.forEach(k => {
     const v = rssi[k];
     const numEl = document.getElementById(`thread-${k}`);
@@ -828,6 +872,17 @@ function renderThread(rssi) {
       fillEl.style.width = `${pct}%`;
     }
   });
+}
+
+function renderStatusWeather(outdoor) {
+  if (!outdoor) return;
+  if (outdoor.wind_speed != null) {
+    setNum('status-wind', outdoor.wind_speed.toFixed(1));
+    const dir = (outdoor.wind_dir || '').toString().toUpperCase();
+    const lbl = document.getElementById('status-wind-dir');
+    if (lbl) lbl.textContent = dir ? `Wind aus ${dir}` : 'Wind';
+  }
+  if (outdoor.rain_today != null) setNum('status-rain', outdoor.rain_today.toFixed(1));
 }
 
 function renderBackup(last, next) {

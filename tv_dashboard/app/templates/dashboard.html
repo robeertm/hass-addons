@@ -109,7 +109,7 @@
     <!-- ── Page 2: WETTER ────────────────────────────────────── -->
     <section class="page" data-page="weather-detail">
       <div class="grid">
-        <div class="tile span-6 row-2 tile-outdoor-chart" data-tile="outdoor-chart">
+        <div class="tile span-8 row-2 tile-outdoor-chart" data-tile="outdoor-chart">
           <div class="tile-label">Außentemperatur · 24 h Verlauf</div>
           <div class="big-chart-wrap">
             <svg class="big-chart" id="outdoor-chart" viewBox="0 0 800 280" preserveAspectRatio="none"></svg>
@@ -121,7 +121,7 @@
           </div>
         </div>
 
-        <div class="tile span-6 tile-weather-now-big" data-tile="weather-now-big">
+        <div class="tile span-4 tile-weather-now-big" data-tile="weather-now-big">
           <div class="tile-label">Jetzt</div>
           <div class="weather-now-flex">
             <div class="weather-icon-anim" id="weather-icon-big"></div>
@@ -132,15 +132,38 @@
           </div>
         </div>
 
-        <div class="tile span-3 tile-mini" data-tile="sun-elev">
-          <div class="tile-label">Sonne</div>
+        <div class="tile span-2 tile-mini tile-needs-data" data-tile="outdoor-humid" data-need="outdoor-humid">
+          <div class="tile-label">💧 Luftfeucht.</div>
+          <div class="tile-value-sm"><span class="num-anim" id="outdoor-humid">—</span><span class="unit">%</span></div>
+          <div class="tile-sub muted">draußen</div>
+        </div>
+
+        <div class="tile span-2 tile-mini tile-needs-data" data-tile="wind" data-need="wind">
+          <div class="tile-label">💨 Wind</div>
+          <div class="tile-value-sm"><span class="num-anim" id="wind-speed">—</span><span class="unit">km/h</span></div>
+          <div class="tile-sub muted" id="wind-dir-label">—</div>
+        </div>
+
+        <div class="tile span-2 tile-mini tile-needs-data" data-tile="rain" data-need="rain">
+          <div class="tile-label">🌧 Regen heute</div>
+          <div class="tile-value-sm"><span class="num-anim" id="rain-today">—</span><span class="unit">mm</span></div>
+          <div class="tile-sub muted" id="rain-now-label">—</div>
+        </div>
+
+        <div class="tile span-2 tile-mini tile-needs-data" data-tile="pressure" data-need="pressure">
+          <div class="tile-label">⏬ Luftdruck</div>
+          <div class="tile-value-sm"><span class="num-anim" id="pressure">—</span><span class="unit">hPa</span></div>
+          <div class="tile-sub muted" id="pressure-trend">—</div>
+        </div>
+
+        <div class="tile span-2 tile-mini" data-tile="sun-elev">
+          <div class="tile-label">☀ Sonne</div>
           <div class="tile-value-sm"><span class="num-anim" id="sun-elevation">—</span><span class="unit">°</span></div>
-          <div class="tile-sub">Höhe</div>
           <div class="tile-sub muted"><span id="sun-azimuth">—</span>° Azimut</div>
         </div>
 
-        <div class="tile span-3 tile-mini" data-tile="daylight">
-          <div class="tile-label">Tageslänge</div>
+        <div class="tile span-2 tile-mini" data-tile="daylight">
+          <div class="tile-label">⏳ Tag</div>
           <div class="tile-value-sm" id="daylight-hours">—</div>
           <div class="tile-sub muted" id="daylight-progress">—</div>
         </div>
@@ -231,7 +254,7 @@
           <div class="batteries-grid" id="batteries-grid"></div>
         </div>
 
-        <div class="tile span-4 tile-thread" data-tile="thread">
+        <div class="tile span-4 tile-thread tile-needs-data" data-tile="thread" data-need="thread">
           <div class="tile-label">📡 Thread Mesh</div>
           <div class="thread-stack">
             <div class="thread-row">
@@ -249,6 +272,16 @@
               <div class="thread-bar"><div class="thread-fill" id="thread-fill-worst"></div></div>
               <span class="thread-val"><span id="thread-worst">—</span> dBm</span>
             </div>
+          </div>
+        </div>
+
+        <div class="tile span-4 tile-wind-mike profile-only-mike" data-tile="wind-status">
+          <div class="tile-label">🌦 Wetterstation</div>
+          <div class="wind-grid">
+            <div><div class="tile-value-sm"><span class="num-anim" id="status-wind">—</span><span class="unit">km/h</span></div><div class="tile-sub muted" id="status-wind-dir">Wind</div></div>
+            <div><div class="tile-value-sm"><span class="num-anim" id="status-rain">—</span><span class="unit">mm</span></div><div class="tile-sub muted">Regen heute</div></div>
+            <div><div class="tile-value-sm"><span class="num-anim" id="status-co2">—</span><span class="unit">ppm</span></div><div class="tile-sub muted">CO₂ innen</div></div>
+            <div><div class="tile-value-sm"><span class="num-anim" id="status-noise">—</span><span class="unit">dB</span></div><div class="tile-sub muted">Lärm innen</div></div>
           </div>
         </div>
 
@@ -404,7 +437,7 @@
           <div class="events-list" id="events-list"></div>
         </div>
 
-        <div class="tile span-4 row-2 tile-vacation-big" data-tile="vacation">
+        <div class="tile span-4 row-2 tile-vacation-big tile-needs-data" data-tile="vacation" data-need="vacation">
           <div class="tile-label">🌴 Urlaub</div>
           <div id="vacation-content">
             <div class="vacation-label" id="vacation-label">—</div>
@@ -414,8 +447,8 @@
           </div>
         </div>
 
-        <div class="tile span-4 tile-garbage-big" data-tile="garbage-big">
-          <div class="tile-label">🗑️ Abfall</div>
+        <div class="tile span-4 row-2 tile-garbage-big" data-tile="garbage-big">
+          <div class="tile-label">🗑️ Abfall · nächste Termine</div>
           <div class="garbage-list" id="garbage-list"></div>
         </div>
       </div>

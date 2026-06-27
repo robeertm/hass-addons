@@ -1200,3 +1200,13 @@ body {
 /* Profile visibility */
 body[data-profile="mike"] .profile-only-robert { display: none !important; }
 body[data-profile="robert"] .profile-only-mike { display: none !important; }
+
+/* Data-driven empty hide */
+.tile-needs-data.tile-empty { display: none !important; }
+
+/* Mike Status Wetterstation Tile (4-cell grid) */
+.tile-wind-mike .wind-grid {
+  display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
+  gap: 12px; flex: 1; align-content: center;
+}
+.tile-wind-mike .wind-grid > div { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }

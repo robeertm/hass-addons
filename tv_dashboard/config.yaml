@@ -1,5 +1,5 @@
 name: TV Dashboard
-version: "1.0.2"
+version: "1.0.3"
 slug: tv_dashboard
 description: Edles Bento-Grid-Wohnzimmer-Dashboard für TV (Catppuccin Mocha, 7 Pages, Solar/Pool/Klima/Internet/Status)
 url: https://github.com/robeertm/hass-addons/tree/main/tv_dashboard
@@ -27,7 +27,7 @@ map:
 options:
   profile: mike
   refresh_seconds: 15
-  page_rotate_seconds: 22
+  page_rotate_seconds: 10
   ha_token: ""
   ha_base_url: ""
 schema:
