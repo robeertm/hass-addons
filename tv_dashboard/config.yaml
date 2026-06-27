@@ -1,0 +1,34 @@
+name: TV Dashboard
+version: "1.0.0"
+slug: tv_dashboard
+description: Edles Bento-Grid-Wohnzimmer-Dashboard für TV (Catppuccin Mocha, 7 Pages, Solar/Pool/Klima/Internet/Status)
+url: https://github.com/robeertm/hass-addons/tree/main/tv_dashboard
+arch:
+  - aarch64
+  - amd64
+  - armv7
+  - armhf
+init: false
+boot: auto
+startup: services
+hassio_role: default
+hassio_api: false
+homeassistant_api: true
+host_network: false
+ingress: false
+panel_icon: mdi:television
+webui: http://[HOST]:[PORT:8765]
+ports:
+  "8765/tcp": 8765
+ports_description:
+  "8765/tcp": Web UI (HTTP) — auf TV-Browser aufrufen
+map:
+  - share:rw
+options:
+  profile: mike
+  refresh_seconds: 15
+  page_rotate_seconds: 22
+schema:
+  profile: list(robert|mike|custom)
+  refresh_seconds: int(5,120)
+  page_rotate_seconds: int(8,120)

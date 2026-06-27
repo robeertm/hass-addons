@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zuhause</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/catppuccin.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+</head>
+<body data-profile="{{ profile }}">
+  <script>window.TV_PROFILE = {{ profile|tojson }}; window.PAGE_ROTATE_MS = {{ (page_rotate_sec * 1000) }};</script>
+  <canvas id="bg-canvas"></canvas>
+
+  <header class="topbar">
+    <div class="clock-mini">
+      <span id="clock-time-mini">—:—</span>
+      <span class="dim" id="clock-date-mini">—</span>
+    </div>
+    <div class="status-mini">
+      <span class="dot dot-live" id="live-dot"></span>
+      <span id="live-text">Live</span>
+    </div>
+  </header>
+
+  <main class="pager" id="pager">
+
+    <!-- ── Page 1: HOME ────────────────────────────────────────── -->
+    <section class="page" data-page="home">
+      <div class="grid">
+        <div class="tile span-7 row-2 tile-clock" data-tile="clock">
+          <div class="clock-time" id="clock-time">— <span class="colon">:</span> —</div>
+          <div class="clock-meta">
+            <div class="clock-date" id="clock-date">—</div>
+            <div class="clock-sub" id="clock-sub">— · KW —</div>
+          </div>
+        </div>
+
+        <div class="tile span-5 row-2 tile-weather-hero" data-tile="weather">
+          <div class="tile-label">Draußen</div>
+          <div class="weather-hero">
+            <div class="weather-icon-anim" id="weather-icon-anim"></div>
+            <div class="weather-info">
+              <div class="weather-temp" id="weather-temp">—°</div>
+              <div class="weather-label" id="weather-label">—</div>
+            </div>
+          </div>
+          <div class="sun-arc-wrap">
+            <svg viewBox="0 0 200 60" preserveAspectRatio="none" class="sun-arc-svg">
+              <defs>
+                <linearGradient id="arc-grad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stop-color="#fab387" stop-opacity="0.7"/>
+                  <stop offset="50%" stop-color="#f9e2af" stop-opacity="0.9"/>
+                  <stop offset="100%" stop-color="#cba6f7" stop-opacity="0.7"/>
+                </linearGradient>
+              </defs>
+              <path d="M 10 55 Q 100 -25 190 55" stroke="url(#arc-grad)" stroke-width="2" fill="none" stroke-dasharray="3 4"/>
+              <circle id="sun-dot" cx="100" cy="5" r="6" fill="#f9e2af"/>
+            </svg>
+            <div class="sun-times">
+              <span>🌅 <span id="sun-rise">—</span></span>
+              <span class="dim" id="sun-progress">—</span>
+              <span>🌇 <span id="sun-set">—</span></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="tile span-7 tile-forecast" data-tile="forecast">
+          <div class="tile-label">5 Tage</div>
+          <div class="forecast" id="forecast"></div>
+        </div>
+
+        <div class="tile span-5 row-2 tile-power-hero" data-tile="power">
+          <div class="tile-label">⚡ Strom heute</div>
+          <div class="power-hero">
+            <div class="power-main">
+              <div class="power-energy"><span class="num-anim" id="energy-today">—</span><span class="unit">kWh</span></div>
+              <div class="power-cost"><span class="num-anim" id="cost-today">—</span> €</div>
+            </div>
+            <div class="power-live">
+              <div class="power-live-label">JETZT</div>
+              <div class="power-live-value">
+                <span class="pulse-dot"></span>
+                <span class="num-anim" id="power-now">—</span>
+                <span class="power-live-unit">W</span>
+              </div>
+            </div>
+          </div>
+          <svg class="sparkline" id="sparkline" viewBox="0 0 400 80" preserveAspectRatio="none"></svg>
+        </div>
+
+        <div class="tile span-3 tile-persons" data-tile="persons">
+          <div class="tile-label">Zuhause</div>
+          <div class="persons-list" id="persons-list"></div>
+        </div>
+
+        <div class="tile span-4 tile-windows" data-tile="windows">
+          <div class="tile-label">🪟 Fenster</div>
+          <div class="windows-flex">
+            <div>
+              <div class="window-count" id="window-count">—</div>
+              <div class="tile-sub" id="window-sub">—</div>
+            </div>
+            <div class="mini-window-list" id="mini-window-list"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Page 2: WETTER ────────────────────────────────────── -->
+    <section class="page" data-page="weather-detail">
+      <div class="grid">
+        <div class="tile span-6 row-2 tile-outdoor-chart" data-tile="outdoor-chart">
+          <div class="tile-label">Außentemperatur · 24 h Verlauf</div>
+          <div class="big-chart-wrap">
+            <svg class="big-chart" id="outdoor-chart" viewBox="0 0 800 280" preserveAspectRatio="none"></svg>
+          </div>
+          <div class="chart-axis">
+            <span id="outdoor-min">—°</span>
+            <span class="dim">Min / Aktuell / Max</span>
+            <span id="outdoor-max">—°</span>
+          </div>
+        </div>
+
+        <div class="tile span-6 tile-weather-now-big" data-tile="weather-now-big">
+          <div class="tile-label">Jetzt</div>
+          <div class="weather-now-flex">
+            <div class="weather-icon-anim" id="weather-icon-big"></div>
+            <div>
+              <div class="weather-now-temp" id="weather-temp-big">—°</div>
+              <div class="weather-now-label" id="weather-label-big">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tile span-3 tile-mini" data-tile="sun-elev">
+          <div class="tile-label">Sonne</div>
+          <div class="tile-value-sm"><span class="num-anim" id="sun-elevation">—</span><span class="unit">°</span></div>
+          <div class="tile-sub">Höhe</div>
+          <div class="tile-sub muted"><span id="sun-azimuth">—</span>° Azimut</div>
+        </div>
+
+        <div class="tile span-3 tile-mini" data-tile="daylight">
+          <div class="tile-label">Tageslänge</div>
+          <div class="tile-value-sm" id="daylight-hours">—</div>
+          <div class="tile-sub muted" id="daylight-progress">—</div>
+        </div>
+
+        <div class="tile span-12 tile-forecast-big-row" data-tile="forecast-big-row">
+          <div class="tile-label">5 Tage Wetter detailliert</div>
+          <div class="forecast-big" id="forecast-big-row"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Page 3: ENERGIE DETAIL ─────────────────────────────── -->
+    <section class="page profile-only-robert" data-page="energy">
+      <div class="grid">
+        <div class="tile span-8 row-2 tile-power-hero-big" data-tile="power-hero-big">
+          <div class="tile-label">⚡ Stromverbrauch · 24 h</div>
+          <div class="power-big-hero">
+            <div>
+              <div class="power-big-energy"><span class="num-anim" id="energy-today-big">—</span><span class="unit">kWh</span></div>
+              <div class="power-big-cost"><span class="num-anim" id="cost-today-big">—</span> €</div>
+            </div>
+            <div class="power-big-live">
+              <span class="pulse-dot"></span>
+              <span class="num-anim" id="power-now-big">—</span>
+              <span class="power-live-unit">W jetzt</span>
+            </div>
+          </div>
+          <svg class="big-chart" id="power-chart-big" viewBox="0 0 800 200" preserveAspectRatio="none"></svg>
+        </div>
+
+        <div class="tile span-4 row-2 tile-co2-big" data-tile="co2-big">
+          <div class="tile-label">🌱 CO₂</div>
+          <div class="co2-stack">
+            <div>
+              <div class="tile-value-md"><span class="num-anim" id="co2-rate">—</span><span class="unit">g/h</span></div>
+              <div class="tile-sub muted">Aktuell</div>
+            </div>
+            <div>
+              <div class="tile-value-md"><span class="num-anim" id="co2-kumuliert">—</span><span class="unit">kg</span></div>
+              <div class="tile-sub muted">Gesamt</div>
+            </div>
+            <div>
+              <div class="tile-value-md"><span class="num-anim" id="grid-co2-big">—</span><span class="unit">g/kWh</span></div>
+              <div class="tile-sub muted">Netz</div>
+              <div class="co2-bar"><div class="co2-bar-fill" id="co2-bar-fill"></div></div>
+              <div class="tile-sub" id="co2-rating">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tile span-3 tile-energy-sub" data-sub="0">
+          <div class="tile-label" id="sub-label-0">—</div>
+          <div class="energy-sub-val"><span class="num-anim" id="sub-energy-0">—</span><span class="unit">kWh</span></div>
+          <div class="tile-sub"><span id="sub-cost-0">—</span> € · <span class="mauve" id="sub-power-0">—</span> W</div>
+          <svg class="mini-spark" id="sub-spark-0" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+        </div>
+        <div class="tile span-3 tile-energy-sub" data-sub="1">
+          <div class="tile-label" id="sub-label-1">—</div>
+          <div class="energy-sub-val"><span class="num-anim" id="sub-energy-1">—</span><span class="unit">kWh</span></div>
+          <div class="tile-sub"><span id="sub-cost-1">—</span> € · <span class="mauve" id="sub-power-1">—</span> W</div>
+          <svg class="mini-spark" id="sub-spark-1" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+        </div>
+        <div class="tile span-3 tile-energy-sub" data-sub="2">
+          <div class="tile-label" id="sub-label-2">—</div>
+          <div class="energy-sub-val"><span class="num-anim" id="sub-energy-2">—</span><span class="unit">kWh</span></div>
+          <div class="tile-sub"><span id="sub-cost-2">—</span> € · <span class="mauve" id="sub-power-2">—</span> W</div>
+          <svg class="mini-spark" id="sub-spark-2" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+        </div>
+        <div class="tile span-3 tile-energy-sub" data-sub="3">
+          <div class="tile-label" id="sub-label-3">—</div>
+          <div class="energy-sub-val"><span class="num-anim" id="sub-energy-3">—</span><span class="unit">kWh</span></div>
+          <div class="tile-sub"><span id="sub-cost-3">—</span> € · <span class="mauve" id="sub-power-3">—</span> W</div>
+          <svg class="mini-spark" id="sub-spark-3" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Page 4: RÄUME mit Mini-Charts ───────────────────────── -->
+    <section class="page profile-only-robert" data-page="rooms">
+      <div class="grid grid-rooms" id="grid-rooms"></div>
+    </section>
+
+    <!-- ── Page 5: BATTERIEN + STATUS ──────────────────────────── -->
+    <section class="page" data-page="status">
+      <div class="grid">
+        <div class="tile span-8 row-3 tile-batteries" data-tile="batteries">
+          <div class="tile-label">🔋 Batterien</div>
+          <div class="batteries-grid" id="batteries-grid"></div>
+        </div>
+
+        <div class="tile span-4 tile-thread" data-tile="thread">
+          <div class="tile-label">📡 Thread Mesh</div>
+          <div class="thread-stack">
+            <div class="thread-row">
+              <span class="thread-label">Best</span>
+              <div class="thread-bar"><div class="thread-fill" id="thread-fill-best"></div></div>
+              <span class="thread-val"><span id="thread-best">—</span> dBm</span>
+            </div>
+            <div class="thread-row">
+              <span class="thread-label">Avg</span>
+              <div class="thread-bar"><div class="thread-fill" id="thread-fill-avg"></div></div>
+              <span class="thread-val"><span id="thread-avg">—</span> dBm</span>
+            </div>
+            <div class="thread-row">
+              <span class="thread-label">Worst</span>
+              <div class="thread-bar"><div class="thread-fill" id="thread-fill-worst"></div></div>
+              <span class="thread-val"><span id="thread-worst">—</span> dBm</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="tile span-4 tile-backup" data-tile="backup">
+          <div class="tile-label">💾 Backup</div>
+          <div class="backup-stack">
+            <div>
+              <div class="backup-when" id="backup-last">—</div>
+              <div class="tile-sub muted">Letztes</div>
+            </div>
+            <div>
+              <div class="backup-when" id="backup-next">—</div>
+              <div class="tile-sub muted">Nächstes</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tile span-4 tile-events-mini" data-tile="events-mini">
+          <div class="tile-label">📅 Heute & Morgen</div>
+          <div class="events-mini" id="events-mini"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Page Mike: SOLAR/PV ─────────────────────────────────── -->
+    <section class="page profile-only-mike" data-page="solar">
+      <div class="grid">
+        <div class="tile span-8 row-2 tile-solar-hero" data-tile="solar-hero">
+          <div class="tile-label">☀ Solar · Live</div>
+          <div class="solar-flow">
+            <div class="flow-cell flow-pv">
+              <div class="flow-icon">☀</div>
+              <div class="flow-value"><span class="num-anim" id="solar-pv-power">—</span><span class="unit">W</span></div>
+              <div class="flow-label">PV-Ertrag</div>
+            </div>
+            <div class="flow-arrow" id="flow-arrow-1">→</div>
+            <div class="flow-cell flow-house">
+              <div class="flow-icon">🏠</div>
+              <div class="flow-value"><span class="num-anim" id="solar-house">—</span><span class="unit">W</span></div>
+              <div class="flow-label">Hausverbrauch</div>
+            </div>
+            <div class="flow-arrow" id="flow-arrow-2">⇄</div>
+            <div class="flow-cell flow-battery">
+              <div class="flow-icon">🔋</div>
+              <div class="flow-value"><span class="num-anim" id="solar-bat-soc">—</span><span class="unit">%</span></div>
+              <div class="flow-label" id="solar-bat-flow">—</div>
+            </div>
+            <div class="flow-arrow" id="flow-arrow-3">⇆</div>
+            <div class="flow-cell flow-grid">
+              <div class="flow-icon">⚡</div>
+              <div class="flow-value"><span class="num-anim" id="solar-grid">—</span><span class="unit">W</span></div>
+              <div class="flow-label" id="solar-grid-label">—</div>
+            </div>
+          </div>
+          <svg class="big-chart" id="solar-chart" viewBox="0 0 800 200" preserveAspectRatio="none"></svg>
+        </div>
+
+        <div class="tile span-4 tile-solar-stats" data-tile="solar-stats">
+          <div class="tile-label">Heute</div>
+          <div class="solar-stats-grid">
+            <div><div class="tile-value-md"><span class="num-anim" id="solar-pv-today">—</span><span class="unit">kWh</span></div><div class="tile-sub muted">PV-Ertrag</div></div>
+            <div><div class="tile-value-md"><span class="num-anim" id="solar-feed-today">—</span><span class="unit">kWh</span></div><div class="tile-sub muted">Einspeisung</div></div>
+            <div><div class="tile-value-md"><span class="num-anim" id="solar-draw-today">—</span><span class="unit">kWh</span></div><div class="tile-sub muted">Netzbezug</div></div>
+          </div>
+        </div>
+
+        <div class="tile span-4 tile-solar-bat" data-tile="solar-bat">
+          <div class="tile-label">Akku Tag</div>
+          <div class="solar-bat-stats">
+            <div><div class="tile-value-md"><span class="num-anim" id="solar-bat-charge">—</span><span class="unit">kWh</span></div><div class="tile-sub muted">Laden</div></div>
+            <div><div class="tile-value-md"><span class="num-anim" id="solar-bat-discharge">—</span><span class="unit">kWh</span></div><div class="tile-sub muted">Entladen</div></div>
+          </div>
+          <svg class="mini-spark" id="solar-bat-chart" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+        </div>
+
+        <div class="tile span-4 tile-wallbox" data-tile="wallbox">
+          <div class="tile-label">🚗 Wallbox</div>
+          <div class="tile-value-md"><span class="num-anim" id="wallbox-total">—</span><span class="unit">kWh gesamt</span></div>
+          <div class="tile-sub"><span class="num-anim" id="wallbox-temp">—</span> °C Modul-Temp</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Page Mike: POOL ─────────────────────────────────────── -->
+    <section class="page profile-only-mike" data-page="pool">
+      <div class="grid">
+        <div class="tile span-4 tile-pool-temp" data-tile="pool-temp">
+          <div class="tile-label">🌊 Wassertemperatur</div>
+          <div class="tile-value"><span class="num-anim" id="pool-temp">—</span><span class="unit">°C</span></div>
+          <svg class="mini-spark" id="pool-temp-chart" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+        </div>
+
+        <div class="tile span-4 tile-pool-ph" data-tile="pool-ph">
+          <div class="tile-label">⚗ pH-Wert</div>
+          <div class="tile-value" id="pool-ph-value"><span class="num-anim" id="pool-ph">—</span></div>
+          <div class="tile-sub" id="pool-ph-rating">—</div>
+          <svg class="mini-spark" id="pool-ph-chart" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+        </div>
+
+        <div class="tile span-4 tile-pool-orp" data-tile="pool-orp">
+          <div class="tile-label">⚡ ORP (Redox)</div>
+          <div class="tile-value" id="pool-orp-value"><span class="num-anim" id="pool-orp">—</span><span class="unit">mV</span></div>
+          <div class="tile-sub" id="pool-orp-rating">—</div>
+          <svg class="mini-spark" id="pool-orp-chart" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+        </div>
+
+        <div class="tile span-6 row-2 tile-pool-pump" data-tile="pool-pump">
+          <div class="tile-label">💧 Pumpe</div>
+          <div class="pool-pump-row">
+            <div class="pool-pump-state" id="pool-pump-state">—</div>
+            <div class="pool-pump-laufzeit">
+              <div class="laufzeit-num"><span class="num-anim" id="pool-laufzeit">—</span><span class="unit">/ <span id="pool-soll">—</span>h</span></div>
+              <div class="laufzeit-bar"><div class="laufzeit-fill" id="pool-laufzeit-fill"></div></div>
+            </div>
+          </div>
+          <div class="pool-status" id="pool-status">—</div>
+        </div>
+
+        <div class="tile span-6 row-2 tile-pool-log" data-tile="pool-log">
+          <div class="tile-label">📜 Aktion-Log</div>
+          <div class="pool-log" id="pool-log">—</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Page 6: INTERNET ────────────────────────────────────── -->
+    <section class="page" data-page="internet">
+      <div class="grid">
+        <div class="tile span-6 row-2 tile-net-hero" data-tile="net-down">
+          <div class="tile-label">⬇ Download</div>
+          <div class="net-value"><span class="num-anim" id="net-down">—</span><span class="unit">Mbit/s</span></div>
+          <svg class="big-chart" id="net-down-chart" viewBox="0 0 800 200" preserveAspectRatio="none"></svg>
+        </div>
+
+        <div class="tile span-6 row-2 tile-net-hero" data-tile="net-up">
+          <div class="tile-label">⬆ Upload</div>
+          <div class="net-value"><span class="num-anim" id="net-up">—</span><span class="unit">Mbit/s</span></div>
+          <svg class="big-chart" id="net-up-chart" viewBox="0 0 800 200" preserveAspectRatio="none"></svg>
+        </div>
+
+        <div class="tile span-12 row-2 tile-clients" data-tile="clients">
+          <div class="tile-label">🛜 Top Clients</div>
+          <div class="clients-list" id="clients-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Page 7: KALENDER + URLAUB + MÜLL ────────────────────── -->
+    <section class="page" data-page="calendar">
+      <div class="grid">
+        <div class="tile span-8 row-3 tile-events" data-tile="events">
+          <div class="tile-label">📅 Termine 7 Tage</div>
+          <div class="events-list" id="events-list"></div>
+        </div>
+
+        <div class="tile span-4 row-2 tile-vacation-big" data-tile="vacation">
+          <div class="tile-label">🌴 Urlaub</div>
+          <div id="vacation-content">
+            <div class="vacation-label" id="vacation-label">—</div>
+            <div class="vacation-days"><span class="num-anim" id="vacation-days">—</span><span class="unit">Tage</span></div>
+            <div class="vacation-range" id="vacation-range">—</div>
+            <div class="vacation-bar"><div class="vacation-bar-fill" id="vacation-bar-fill"></div></div>
+          </div>
+        </div>
+
+        <div class="tile span-4 tile-garbage-big" data-tile="garbage-big">
+          <div class="tile-label">🗑️ Abfall</div>
+          <div class="garbage-list" id="garbage-list"></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="pageindicator" id="pageindicator">
+    <span class="indicator-dot" data-idx="0"></span>
+    <span class="indicator-dot" data-idx="1"></span>
+    <span class="indicator-dot" data-idx="2"></span>
+    <span class="indicator-dot" data-idx="3"></span>
+    <span class="indicator-dot" data-idx="4"></span>
+    <span class="indicator-dot" data-idx="5"></span>
+    <span class="indicator-dot" data-idx="6"></span>
+  </footer>
+
+  <script src="{{ url_for('static', filename='js/background.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
