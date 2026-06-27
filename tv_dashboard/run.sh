@@ -5,7 +5,7 @@ CONFIG_PATH=/data/options.json
 
 PROFILE=$(jq -r '.profile // "mike"' "$CONFIG_PATH" 2>/dev/null || echo "mike")
 REFRESH=$(jq -r '.refresh_seconds // 15' "$CONFIG_PATH" 2>/dev/null || echo 15)
-ROTATE=$(jq -r '.page_rotate_seconds // 10' "$CONFIG_PATH" 2>/dev/null || echo 10)
+ROTATE=$(jq -r '.page_rotate_seconds // 3' "$CONFIG_PATH" 2>/dev/null || echo 3)
 USER_TOKEN=$(jq -r '.ha_token // ""' "$CONFIG_PATH" 2>/dev/null || echo "")
 USER_URL=$(jq -r '.ha_base_url // ""' "$CONFIG_PATH" 2>/dev/null || echo "")
 
@@ -22,7 +22,7 @@ else
   export HA_TOKEN="${SUPERVISOR_TOKEN:-}"
 fi
 
-echo "[run] tv_dashboard v1.0.3 profile=$PROFILE refresh=${REFRESH}s rotate=${ROTATE}s"
+echo "[run] tv_dashboard v1.0.4 profile=$PROFILE refresh=${REFRESH}s rotate=${ROTATE}s"
 echo "[run] HA_BASE_URL=$HA_BASE_URL TOKEN_LEN=${#HA_TOKEN}"
 
 cd /app

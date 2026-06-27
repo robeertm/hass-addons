@@ -1,3 +1,8 @@
+## 1.0.4 (2026-06-27)
+
+- Page-Rotation Default 10s → 3s (Robert-Wunsch: lebhaftere Rotation)
+- Schema-Min: `page_rotate_seconds` von 8 auf 2 gelockert
+
 ## 1.0.3 (2026-06-27)
 
 - Mike-Profil: Wetterstation-Entities erweitert (Wind, Regen, Luftdruck, Außen-Luftfeuchte, Indoor-CO₂/Lärm)
