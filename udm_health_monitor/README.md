@@ -66,9 +66,18 @@ alerts:
 
 ## Prerequisites
 
-- A **UniFi local-account** with at minimum read access to the controller
-  (Settings → Admins). NOT the Ubiquiti cloud-SSO login.
+- A **dedicated UniFi local-account** with read access (Settings → Admins).
+  NOT the Ubiquiti cloud-SSO login.
+- ⚠️ **Use a separate account from your HA UniFi-Network integration**.
+  UDM-OS allows only one active session per user; sharing a login causes
+  this add-on and HA's UniFi-Network integration to kick each other out
+  every poll cycle. Suggestion: create `claude_monitor` (or similar) with
+  read-only role, dedicated to this add-on.
 - MQTT broker reachable from the add-on (typically Mosquitto add-on).
+- A **dedicated MQTT user** for the add-on (the add-on auto-detects HA
+  Supervisor-managed MQTT credentials if `mqtt.username`/`password` are
+  blank; for stand-alone Mosquitto, create a user and put the credentials
+  in the config).
 
 ## Multi-Instance
 
