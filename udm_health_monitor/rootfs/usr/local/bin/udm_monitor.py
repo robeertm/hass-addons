@@ -164,7 +164,6 @@ def discovery_configs(device_id: str, device_name: str,
             **common,
             "name": name,
             "unique_id": f"udm_{device_id}_{key}",
-            "object_id": f"udm_{device_id}_{key}",
             "value_template": value_template or f"{{{{ value_json.{key} }}}}",
         }
         if unit: cfg["unit_of_measurement"] = unit
@@ -172,7 +171,8 @@ def discovery_configs(device_id: str, device_name: str,
         if dc: cfg["device_class"] = dc
         if sc: cfg["state_class"] = sc
         if category: cfg["entity_category"] = category
-        topic = f"{disc_prefix}/sensor/udm_{device_id}/{key}/config"
+        # flat topic structure (HA had issues placing node_id+object_id reliably for this device set)
+        topic = f"{disc_prefix}/sensor/udm_{device_id}_{key}/config"
         return topic, cfg
 
     def binary(key: str, name: str, ic: str = None, dc: str = None, category: str = None):
@@ -180,7 +180,6 @@ def discovery_configs(device_id: str, device_name: str,
             **common,
             "name": name,
             "unique_id": f"udm_{device_id}_{key}",
-            "object_id": f"udm_{device_id}_{key}",
             "value_template": f"{{{{ value_json.{key} }}}}",
             "payload_on": "on",
             "payload_off": "off",
@@ -188,7 +187,7 @@ def discovery_configs(device_id: str, device_name: str,
         if ic: cfg["icon"] = ic
         if dc: cfg["device_class"] = dc
         if category: cfg["entity_category"] = category
-        topic = f"{disc_prefix}/binary_sensor/udm_{device_id}/{key}/config"
+        topic = f"{disc_prefix}/binary_sensor/udm_{device_id}_{key}/config"
         return topic, cfg
 
     return [
