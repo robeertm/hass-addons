@@ -34,12 +34,19 @@ else
   log "WARN: BlueZ DBus socket NOT present — BLE pair will fail"
 fi
 
+# noble BLE backend selects adapter via NOBLE_HCI_DEVICE_ID env var,
+# NOT a CLI arg. Without this, noble defaults to hci0 (which on Mike's
+# HAOS-Pi is the weak built-in BT, while hci1 = TP-Link UB500 is the
+# one we actually want).
+export NOBLE_HCI_DEVICE_ID="${BT_ADAPTER}"
+log "noble HCI adapter: hci${BT_ADAPTER} (via NOBLE_HCI_DEVICE_ID env)"
+
 ARGS=( "--storage-path" "/data"
        "--port" "5580"
        "--log-level" "${LOG_LEVEL}"
        "--fabricid" "${FABRIC_ID}"
        "--vendorid" "${VENDOR_ID}"
-       "--bluetooth-adapter" "${BT_ADAPTER}" )
+       "--ble-hci-id" "${BT_ADAPTER}" )
 
 if [ -n "${PRIMARY_IF}" ]; then
   ARGS+=( "--primary-interface" "${PRIMARY_IF}" )

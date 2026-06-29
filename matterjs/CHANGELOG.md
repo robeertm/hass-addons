@@ -1,3 +1,14 @@
+## 1.1.5 - 2026-06-29
+
+- **FIX**: noble BLE backend was defaulting to hci0 regardless of the
+  `bluetooth_adapter` option. Now sets `NOBLE_HCI_DEVICE_ID` env var so the
+  noble library actually targets the configured adapter (essential when
+  hci0 is the weak built-in chip and hci1 is the working USB dongle).
+- Switched CLI arg from `--bluetooth-adapter` (silently ignored by
+  matter-server v1.1.1) to `--ble-hci-id`. The previous arg passed without
+  effect, but the noble env var is what actually controls which adapter
+  noble scans on.
+
 ## 1.1.1 - 2026-06-29
 
 Initial release. Drop-in alternative to `core_matter_server` for cases
