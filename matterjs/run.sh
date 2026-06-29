@@ -45,7 +45,8 @@ ARGS=( "--storage-path" "/data"
        "--port" "5580"
        "--log-level" "${LOG_LEVEL}"
        "--fabricid" "${FABRIC_ID}"
-       "--vendorid" "${VENDOR_ID}" )
+       "--vendorid" "${VENDOR_ID}"
+       "--bluetooth-adapter" "${BT_ADAPTER}" )
 
 if [ -n "${PRIMARY_IF}" ]; then
   ARGS+=( "--primary-interface" "${PRIMARY_IF}" )

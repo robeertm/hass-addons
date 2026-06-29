@@ -1,3 +1,11 @@
+## 1.1.7 - 2026-06-29
+
+- Restored `--bluetooth-adapter` CLI arg. matter-server v1.1.1 needs *some*
+  BLE-related arg to set `bluetooth_enabled: true` on the WS, even if it
+  doesn't propagate the chosen adapter to noble. Combined with the
+  NOBLE_HCI_DEVICE_ID env from 1.1.5, both halves are now in place:
+  matter-server enables BLE, noble actually targets the right adapter.
+
 ## 1.1.6 - 2026-06-29
 
 - **HOTFIX**: removed `--ble-hci-id` CLI arg — matter-server v1.1.1 errors
