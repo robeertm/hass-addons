@@ -1,0 +1,38 @@
+name: matter.js Server
+version: "1.1.1"
+slug: matterjs
+description: matter.js-based Matter WebSocket Server with native BLE access via BlueZ DBus (drop-in replacement for core_matter_server when BLE-Proxy fails)
+url: https://github.com/robeertm/hass-addons
+arch:
+  - aarch64
+  - amd64
+init: false
+boot: auto
+startup: services
+hassio_role: default
+hassio_api: false
+homeassistant_api: false
+host_network: true
+host_dbus: true
+apparmor: false
+ingress: false
+ports:
+  "5580/tcp": 5580
+ports_description:
+  "5580/tcp": Matter Server WebSocket
+map:
+  - share:rw
+discovery:
+  - matter
+options:
+  log_level: info
+  bluetooth_adapter: 0
+  fabric_id: 2
+  vendor_id: 65521
+  primary_interface: ""
+schema:
+  log_level: list(debug|info|notice|warning|error|fatal)
+  bluetooth_adapter: int(-1,99)
+  fabric_id: int(1,99999999)
+  vendor_id: int(1,65535)
+  primary_interface: str?
