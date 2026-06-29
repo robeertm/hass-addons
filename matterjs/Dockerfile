@@ -18,7 +18,7 @@ RUN apt-get update \
 
 WORKDIR /
 
-COPY rootfs/run.sh /run.sh
+COPY run.sh /run.sh
 RUN chmod a+x /run.sh \
  && ls -la /run.sh \
  && head -1 /run.sh
