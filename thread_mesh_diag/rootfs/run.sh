@@ -18,7 +18,8 @@ case "${LOG_LEVEL}" in
 esac
 
 # Name overrides → reshape list[{node_id,slug}] → dict {node_id: slug}
-NAME_OVERRIDES_JSON=$(bashio::config 'name_overrides' | jq -c 'map({(.node_id|tostring): .slug}) | add // {}')
+# Read raw options.json directly because bashio::config on lists prints items per-line.
+NAME_OVERRIDES_JSON=$(jq -c '.name_overrides // [] | map({(.node_id|tostring): .slug}) | add // {}' /data/options.json)
 
 bashio::log.info "Thread Mesh Diagnostics starting"
 bashio::log.info "  matter.js: ws://${MJS_HOST}:${MJS_PORT}/ws"

@@ -1,5 +1,5 @@
 name: Thread Mesh Diagnostics
-version: "1.0.1"
+version: "1.0.2"
 slug: thread_mesh_diag
 description: Polls matter.js Server (ThreadNetworkDiagnostics cluster 0x35) for per-Eve RSSI and publishes sensors to HA via Supervisor proxy. Mike-Variante von Roberts dump_mesh.py (HAOS-kompatibel, kein docker exec nötig).
 url: https://github.com/robeertm/hass-addons

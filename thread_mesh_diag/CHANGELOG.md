@@ -1,3 +1,10 @@
+## 1.0.2 - 2026-06-29
+
+- **Hotfix**: `bashio::config 'name_overrides'` emits each list item on its
+  own line, not the list as JSON, so the previous `jq map(...)` failed with
+  "Cannot index string with string 'node_id'". Read raw `/data/options.json`
+  directly via jq instead.
+
 ## 1.0.1 - 2026-06-29
 
 - **Schema fix**: `name_overrides` schema using wildcard `"*": str` was rejected
