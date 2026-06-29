@@ -16,8 +16,12 @@ RUN apt-get update \
  && ln -s /usr/lib/bashio/bashio /usr/bin/bashio \
  && rm -rf /tmp/bashio* /var/lib/apt/lists/*
 
+WORKDIR /
+
 COPY rootfs/run.sh /run.sh
-RUN chmod a+x /run.sh
+RUN chmod a+x /run.sh \
+ && ls -la /run.sh \
+ && head -1 /run.sh
 
 # Override upstream image's ENTRYPOINT (node MatterServer.js) — our run.sh
 # constructs the argv with options from /data/options.json and exec's matter.js.
