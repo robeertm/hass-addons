@@ -42,20 +42,22 @@ export NOBLE_HCI_DEVICE_ID="${BT_ADAPTER}"
 log "noble HCI adapter: hci${BT_ADAPTER} (via NOBLE_HCI_DEVICE_ID env)"
 
 # Best-effort power-up of the BLE adapter. HA's bluetooth integration sets
-# Powered=false on adapter release, and noble cannot resurrect that state.
-# We use bluetoothctl (via bluez package) to call Powered=true on hci<N>.
+# Powered=false on adapter release; noble can't resurrect a Powered=false
+# adapter. `bluetoothctl list` shows Controller<MAC><alias>, no hciN.
+# So we power on EVERY known controller and let noble pick the right one
+# via NOBLE_HCI_DEVICE_ID.
 if [ "${BT_ADAPTER}" != "-1" ]; then
-  ADAPTER_MAC=$(timeout 5 bluetoothctl list 2>/dev/null | awk "/hci${BT_ADAPTER}/ {print \$2}")
-  if [ -n "${ADAPTER_MAC}" ]; then
-    log "  Adapter hci${BT_ADAPTER} MAC=${ADAPTER_MAC} — invoking 'power on'"
-    timeout 5 bluetoothctl <<EOF
-select ${ADAPTER_MAC}
+  log "  --- BlueZ adapter list ---"
+  timeout 5 bluetoothctl list 2>&1 | while read -r line; do log "    ${line}"; done
+  # Extract every MAC from 'Controller XX:XX:XX:XX:XX:XX ...' lines
+  for mac in $(timeout 5 bluetoothctl list 2>/dev/null | awk '/^Controller / {print $2}'); do
+    log "  power on ${mac}"
+    timeout 5 bluetoothctl <<EOF >/dev/null 2>&1
+select ${mac}
 power on
 EOF
-    log "  bluetoothctl power on done"
-  else
-    log "  WARN: hci${BT_ADAPTER} nicht in bluetoothctl list gefunden — überspringe power-on"
-  fi
+  done
+  log "  bluetoothctl power-on done"
 fi
 
 ARGS=( "--storage-path" "/data"

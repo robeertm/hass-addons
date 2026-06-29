@@ -1,5 +1,5 @@
 name: matter.js Server
-version: "1.1.8"
+version: "1.1.9"
 slug: matterjs
 description: matter.js-based Matter WebSocket Server with native BLE access via BlueZ DBus (drop-in replacement for core_matter_server when BLE-Proxy fails)
 url: https://github.com/robeertm/hass-addons

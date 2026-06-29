@@ -1,3 +1,10 @@
+## 1.1.9 - 2026-06-29
+
+- **HOTFIX**: `bluetoothctl list` shows `Controller MAC alias`, not `hciN`,
+  so v1.1.8's hci-name match found nothing. Now we iterate over every MAC
+  in the controller list and invoke `power on` on each. noble then picks
+  the right one via NOBLE_HCI_DEVICE_ID.
+
 ## 1.1.8 - 2026-06-29
 
 - **FIX**: HA's bluetooth integration sets `Powered=false` on the adapter
