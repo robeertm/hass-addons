@@ -41,6 +41,23 @@ fi
 export NOBLE_HCI_DEVICE_ID="${BT_ADAPTER}"
 log "noble HCI adapter: hci${BT_ADAPTER} (via NOBLE_HCI_DEVICE_ID env)"
 
+# Best-effort power-up of the BLE adapter. HA's bluetooth integration sets
+# Powered=false on adapter release, and noble cannot resurrect that state.
+# We use bluetoothctl (via bluez package) to call Powered=true on hci<N>.
+if [ "${BT_ADAPTER}" != "-1" ]; then
+  ADAPTER_MAC=$(timeout 5 bluetoothctl list 2>/dev/null | awk "/hci${BT_ADAPTER}/ {print \$2}")
+  if [ -n "${ADAPTER_MAC}" ]; then
+    log "  Adapter hci${BT_ADAPTER} MAC=${ADAPTER_MAC} — invoking 'power on'"
+    timeout 5 bluetoothctl <<EOF
+select ${ADAPTER_MAC}
+power on
+EOF
+    log "  bluetoothctl power on done"
+  else
+    log "  WARN: hci${BT_ADAPTER} nicht in bluetoothctl list gefunden — überspringe power-on"
+  fi
+fi
+
 ARGS=( "--storage-path" "/data"
        "--port" "5580"
        "--log-level" "${LOG_LEVEL}"

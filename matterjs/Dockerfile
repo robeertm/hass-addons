@@ -8,7 +8,7 @@ USER root
 # jq for parsing /data/options.json. Skip bashio: base is plain Debian, not
 # HAOS s6-overlay, so /usr/bin/with-contenv isn't available.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends jq ca-certificates \
+ && apt-get install -y --no-install-recommends jq ca-certificates bluez \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /

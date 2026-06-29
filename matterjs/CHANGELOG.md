@@ -1,3 +1,12 @@
+## 1.1.8 - 2026-06-29
+
+- **FIX**: HA's bluetooth integration sets `Powered=false` on the adapter
+  when it releases it (e.g. via `config_entries/disable`). noble cannot
+  resurrect a powered-off adapter on its own, leaving us stuck in
+  `noble state is not poweredOn`. Added `bluez` package and a startup-time
+  `bluetoothctl power on` for the configured hci adapter to recover the
+  powered state before matter-server starts.
+
 ## 1.1.7 - 2026-06-29
 
 - Restored `--bluetooth-adapter` CLI arg. matter-server v1.1.1 needs *some*
