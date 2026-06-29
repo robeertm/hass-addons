@@ -1,3 +1,10 @@
+## 1.1.6 - 2026-06-29
+
+- **HOTFIX**: removed `--ble-hci-id` CLI arg — matter-server v1.1.1 errors
+  out with "unknown option '--ble-hci-id'" on startup. The `NOBLE_HCI_DEVICE_ID`
+  env var (added in 1.1.5) is sufficient on its own to direct noble to the
+  right adapter. No matter-server CLI flag exposes adapter selection.
+
 ## 1.1.5 - 2026-06-29
 
 - **FIX**: noble BLE backend was defaulting to hci0 regardless of the
