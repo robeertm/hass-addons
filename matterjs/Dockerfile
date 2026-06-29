@@ -19,5 +19,7 @@ RUN apt-get update \
 COPY rootfs/run.sh /run.sh
 RUN chmod a+x /run.sh
 
-# matter-server reads ENV vars; we'll override CMD via run.sh
+# Override upstream image's ENTRYPOINT (node MatterServer.js) — our run.sh
+# constructs the argv with options from /data/options.json and exec's matter.js.
+ENTRYPOINT []
 CMD ["/run.sh"]
