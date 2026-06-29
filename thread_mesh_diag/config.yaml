@@ -1,5 +1,5 @@
 name: Thread Mesh Diagnostics
-version: "1.0.0"
+version: "1.0.1"
 slug: thread_mesh_diag
 description: Polls matter.js Server (ThreadNetworkDiagnostics cluster 0x35) for per-Eve RSSI and publishes sensors to HA via Supervisor proxy. Mike-Variante von Roberts dump_mesh.py (HAOS-kompatibel, kein docker exec nötig).
 url: https://github.com/robeertm/hass-addons
@@ -25,10 +25,14 @@ options:
     interval_seconds: 300
   sensor_prefix: thread_rssi
   name_overrides:
-    "10": "eve_energy_wohnzimmer"
-    "11": "eve_thermo_schlafzimmer"
-    "14": "eve_door_schlafzimmer_rechts"
-    "15": "eve_door_schlafzimmer_links"
+    - node_id: "10"
+      slug: "eve_energy_wohnzimmer"
+    - node_id: "11"
+      slug: "eve_thermo_schlafzimmer"
+    - node_id: "14"
+      slug: "eve_door_schlafzimmer_rechts"
+    - node_id: "15"
+      slug: "eve_door_schlafzimmer_links"
 schema:
   log_level: list(debug|info|notice|warning|error|fatal)
   matterjs:
@@ -38,4 +42,5 @@ schema:
     interval_seconds: int(60,3600)
   sensor_prefix: str
   name_overrides:
-    "*": str
+    - node_id: str
+      slug: str

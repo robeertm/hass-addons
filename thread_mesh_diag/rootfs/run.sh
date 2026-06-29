@@ -17,8 +17,8 @@ case "${LOG_LEVEL}" in
   *) PYLOG=INFO ;;
 esac
 
-# Name overrides → serialized as JSON for the Python side
-NAME_OVERRIDES_JSON=$(bashio::config 'name_overrides' | jq -c '.')
+# Name overrides → reshape list[{node_id,slug}] → dict {node_id: slug}
+NAME_OVERRIDES_JSON=$(bashio::config 'name_overrides' | jq -c 'map({(.node_id|tostring): .slug}) | add // {}')
 
 bashio::log.info "Thread Mesh Diagnostics starting"
 bashio::log.info "  matter.js: ws://${MJS_HOST}:${MJS_PORT}/ws"

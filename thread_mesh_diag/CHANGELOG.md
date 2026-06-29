@@ -1,3 +1,11 @@
+## 1.0.1 - 2026-06-29
+
+- **Schema fix**: `name_overrides` schema using wildcard `"*": str` was rejected
+  by Supervisor as a required literal-`*` key. Changed to a list of
+  `{node_id, slug}` entries which validates cleanly. `run.sh` now reshapes
+  the list back into a `{node_id: slug}` dict via `jq` before exporting to
+  the Python side. No code changes to the Python script.
+
 ## 1.0.0 - 2026-06-29
 
 Initial release.
