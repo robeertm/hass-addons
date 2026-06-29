@@ -1,4 +1,8 @@
-#!/usr/bin/with-contenv bashio
+#!/bin/bash
+# matter.js Server add-on entrypoint.
+# Base image is ghcr.io/matter-js/matterjs-server (Debian bookworm) — NOT
+# the HAOS s6-overlay base, so we don't use bashio/with-contenv. Plain jq
+# reads /data/options.json and we exec matter-server directly.
 set -e
 
 OPTS=/data/options.json
@@ -9,33 +13,37 @@ FABRIC_ID=$(jq -r '.fabric_id // 2' "${OPTS}")
 VENDOR_ID=$(jq -r '.vendor_id // 65521' "${OPTS}")
 PRIMARY_IF=$(jq -r '.primary_interface // ""' "${OPTS}")
 
-bashio::log.info "matter.js Server starting"
-bashio::log.info "  log_level: ${LOG_LEVEL}"
-bashio::log.info "  bluetooth_adapter: ${BT_ADAPTER}"
-bashio::log.info "  fabric_id: ${FABRIC_ID}"
-bashio::log.info "  vendor_id: ${VENDOR_ID}"
-bashio::log.info "  primary_interface: ${PRIMARY_IF:-<auto>}"
+ts() { date "+%Y-%m-%d %H:%M:%S"; }
+log() { echo "$(ts) [matterjs-addon] $*"; }
+
+log "matter.js Server starting"
+log "  log_level: ${LOG_LEVEL}"
+log "  bluetooth_adapter: ${BT_ADAPTER}"
+log "  fabric_id: ${FABRIC_ID}"
+log "  vendor_id: ${VENDOR_ID}"
+log "  primary_interface: ${PRIMARY_IF:-<auto>}"
 
 mkdir -p /data
 
-# Probe BlueZ access (don't fail if missing — log clearly)
+# Probe BlueZ DBus access — chip-native BLE depends on this
 if [ -S /var/run/dbus/system_bus_socket ]; then
-  bashio::log.info "BlueZ DBus socket present at /var/run/dbus/system_bus_socket"
+  log "BlueZ DBus socket present at /var/run/dbus/system_bus_socket"
+elif [ -S /run/dbus/system_bus_socket ]; then
+  log "BlueZ DBus socket present at /run/dbus/system_bus_socket"
 else
-  bashio::log.warning "BlueZ DBus socket NOT present at /var/run/dbus/system_bus_socket"
+  log "WARN: BlueZ DBus socket NOT present — BLE pair will fail"
 fi
 
-# Build argv
-ARGS=( "--storage-path" "/data" \
-       "--port" "5580" \
-       "--log-level" "${LOG_LEVEL}" \
-       "--fabricid" "${FABRIC_ID}" \
-       "--vendorid" "${VENDOR_ID}" \
+ARGS=( "--storage-path" "/data"
+       "--port" "5580"
+       "--log-level" "${LOG_LEVEL}"
+       "--fabricid" "${FABRIC_ID}"
+       "--vendorid" "${VENDOR_ID}"
        "--bluetooth-adapter" "${BT_ADAPTER}" )
 
 if [ -n "${PRIMARY_IF}" ]; then
   ARGS+=( "--primary-interface" "${PRIMARY_IF}" )
 fi
 
-bashio::log.info "Exec: node --enable-source-maps /app/node_modules/matter-server/dist/esm/MatterServer.js ${ARGS[*]}"
+log "Exec: node --enable-source-maps /app/node_modules/matter-server/dist/esm/MatterServer.js ${ARGS[*]}"
 exec node --enable-source-maps /app/node_modules/matter-server/dist/esm/MatterServer.js "${ARGS[@]}"
