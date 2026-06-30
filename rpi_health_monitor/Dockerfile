@@ -6,7 +6,7 @@ ENV LANG=C.UTF-8 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
 
-RUN apk add --no-cache python3 py3-pip ca-certificates tzdata raspberrypi-utils \
+RUN apk add --no-cache python3 py3-pip ca-certificates tzdata \
  && python3 -m pip install --break-system-packages --no-cache-dir \
         paho-mqtt
 

@@ -180,18 +180,56 @@ def sample_netdev() -> dict:
     return res
 
 
+def _decode_throttled(v: int, raw_hex: str) -> dict:
+    return {
+        "raw_hex": raw_hex,
+        "undervoltage_now":      bool(v & (1 << 0)),
+        "freq_capped_now":       bool(v & (1 << 1)),
+        "throttled_now":         bool(v & (1 << 2)),
+        "soft_temp_limit_now":   bool(v & (1 << 3)),
+        "undervoltage_ever":     bool(v & (1 << 16)),
+        "freq_capped_ever":      bool(v & (1 << 17)),
+        "throttled_ever":        bool(v & (1 << 18)),
+        "soft_temp_limit_ever":  bool(v & (1 << 19)),
+        "any_now":  any(bool(v & (1 << b)) for b in (0,1,2,3)),
+        "any_ever": any(bool(v & (1 << b)) for b in (16,17,18,19)),
+    }
+
+
 def sample_throttled() -> dict:
-    """Parse `vcgencmd get_throttled` output. Returns flags + raw hex.
+    """Read RPi throttled status. Tries (1) /sys hwmon node (modern kernels),
+    (2) vcgencmd CLI tool. Returns decoded flags or {}.
     Bits per Pi spec:
       0: under-voltage now
       1: arm frequency capped now
       2: throttled now
       3: soft temp limit reached now
-      16: under-voltage since boot
-      17: arm frequency capped since boot
-      18: throttled since boot
-      19: soft temp limit reached since boot
+      16+: same since boot
     """
+    # 1) /sys: hwmon throttle counters from cpufreq driver (rpi5/cm5)
+    for hw in sorted(SYS.glob("class/hwmon/hwmon*")):
+        name = read_file(hw / "name")
+        if "rpi" in name.lower():
+            tmp = read_file(hw / "in0_lcrit_alarm")
+            if tmp.isdigit():
+                # in0_lcrit_alarm: 1 = undervoltage now
+                v = 0
+                if int(tmp) == 1:
+                    v |= (1 << 0)
+                return _decode_throttled(v, hex(v))
+    # 2) /sys: legacy firmware sysfs (some BSPs expose direct throttled bitmap)
+    for path_candidate in [
+        "/sys/devices/platform/soc/soc:firmware/get_throttled",
+        "/sys/class/leds/PWR/trigger",
+    ]:
+        v_str = read_file(Path(path_candidate))
+        if v_str.startswith("0x"):
+            try:
+                v = int(v_str, 16)
+                return _decode_throttled(v, v_str)
+            except ValueError:
+                pass
+    # 3) vcgencmd
     try:
         out = subprocess.run(["vcgencmd", "get_throttled"], capture_output=True,
                              text=True, timeout=5)
@@ -199,19 +237,7 @@ def sample_throttled() -> dict:
         if "=" in s:
             hex_val = s.split("=")[1].strip()
             v = int(hex_val, 16)
-            return {
-                "raw_hex": hex_val,
-                "undervoltage_now":      bool(v & (1 << 0)),
-                "freq_capped_now":       bool(v & (1 << 1)),
-                "throttled_now":         bool(v & (1 << 2)),
-                "soft_temp_limit_now":   bool(v & (1 << 3)),
-                "undervoltage_ever":     bool(v & (1 << 16)),
-                "freq_capped_ever":      bool(v & (1 << 17)),
-                "throttled_ever":        bool(v & (1 << 18)),
-                "soft_temp_limit_ever":  bool(v & (1 << 19)),
-                "any_now":  any(bool(v & (1 << b)) for b in (0,1,2,3)),
-                "any_ever": any(bool(v & (1 << b)) for b in (16,17,18,19)),
-            }
+            return _decode_throttled(v, hex_val)
     except Exception:
         pass
     return {}
