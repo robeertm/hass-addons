@@ -1,0 +1,65 @@
+name: RPi Health Monitor
+version: "1.0.0"
+slug: rpi_health_monitor
+description: Monitor RPi/HAOS host (CPU/Mem/Disk/Temp/SD-IO/Throttling/Network) via /proc + /sys, publish to MQTT with HA Auto-Discovery. Daily SD-write tracking + endurance estimation.
+url: https://github.com/robeertm/hass-addons
+arch:
+  - aarch64
+  - amd64
+  - armv7
+  - armhf
+init: false
+boot: auto
+startup: services
+hassio_role: default
+hassio_api: false
+homeassistant_api: false
+host_network: true
+host_pid: true
+privileged:
+  - SYS_RAWIO
+panel_icon: mdi:raspberry-pi
+options:
+  log_level: info
+  device:
+    name: "Mike RPi (HAOS)"
+    id_suffix: "mike_pi"
+  poll:
+    interval_seconds: 30
+  disk:
+    block_device: "mmcblk0"
+    sd_tbw_lifetime_gb: 300
+  mqtt:
+    broker: core-mosquitto
+    port: 1883
+    username: ""
+    password: ""
+    discovery_prefix: homeassistant
+    state_topic_prefix: rpi_health
+  alerts:
+    cpu_temp_warn_c: 70
+    cpu_temp_alert_c: 80
+    mem_pct_warn: 85
+    disk_pct_warn: 85
+schema:
+  log_level: list(trace|debug|info|notice|warning|error|fatal)
+  device:
+    name: str
+    id_suffix: match(^[a-z0-9_]+$)
+  poll:
+    interval_seconds: int(10,600)
+  disk:
+    block_device: str
+    sd_tbw_lifetime_gb: int(10,100000)
+  mqtt:
+    broker: str
+    port: port
+    username: str?
+    password: password?
+    discovery_prefix: str
+    state_topic_prefix: str
+  alerts:
+    cpu_temp_warn_c: float(40,100)
+    cpu_temp_alert_c: float(40,100)
+    mem_pct_warn: float(0,100)
+    disk_pct_warn: float(0,100)
