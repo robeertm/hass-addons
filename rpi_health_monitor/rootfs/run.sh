@@ -5,6 +5,12 @@ CFG=/data/options.json
 
 bashio::log.info "RPi Health Monitor starting"
 
+# Optional one-shot: patch HA configuration.yaml recorder.commit_interval
+if bashio::config.true 'config_patcher.enabled'; then
+  bashio::log.info "config_patcher enabled — running one-shot"
+  python3 /usr/local/bin/config_patcher.py || true
+fi
+
 # Auto-discover MQTT credentials from HA Supervisor if blank
 if bashio::config.is_empty 'mqtt.username' && bashio::services.available 'mqtt'; then
   bashio::log.info "Using HA-supplied MQTT credentials"
