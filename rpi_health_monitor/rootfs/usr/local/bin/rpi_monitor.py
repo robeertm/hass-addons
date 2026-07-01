@@ -9,6 +9,10 @@ Works on:
 
 Reads config from /data/options.json (HA Add-on) OR
 ${RPI_MONITOR_CFG} env var (systemd-service).
+
+v1.0.3: NVMe SMART support. When block_device starts with 'nvme', reads
+real endurance data via `nvme smart-log --output-format=json` and reports
+actual chip-reported wear (Percentage Used) instead of estimated TBW ratio.
 """
 from __future__ import annotations
 
@@ -47,7 +51,6 @@ def sample_cpu_times() -> dict | None:
         parts = line.split()
         if parts[0] != "cpu":
             return None
-        # cpu user nice system idle iowait irq softirq steal guest guest_nice
         names = ["user","nice","system","idle","iowait","irq","softirq","steal"]
         vals = [int(p) for p in parts[1:9]]
         d = dict(zip(names, vals))
@@ -59,7 +62,6 @@ def sample_cpu_times() -> dict | None:
 
 
 def sample_meminfo() -> dict:
-    """Read /proc/meminfo, return key->kB int."""
     res = {}
     try:
         for line in read_file(PROC / "meminfo").splitlines():
@@ -92,7 +94,6 @@ def sample_uptime_seconds() -> float:
 
 
 def sample_cpu_temp_celsius() -> float | None:
-    """Read /sys/class/thermal/thermal_zone0/temp (millidegree C)."""
     for zone in sorted((SYS / "class/thermal").glob("thermal_zone*")):
         t = read_file(zone / "temp")
         if t.isdigit():
@@ -103,18 +104,16 @@ def sample_cpu_temp_celsius() -> float | None:
 
 
 def sample_cpu_freq_mhz() -> float | None:
-    """Current CPU frequency in MHz, from cpufreq."""
     for cpu in sorted((SYS / "devices/system/cpu").glob("cpu[0-9]*")):
         f = read_file(cpu / "cpufreq/scaling_cur_freq")
         if f.isdigit():
-            return round(int(f) / 1000.0, 0)  # kHz -> MHz
+            return round(int(f) / 1000.0, 0)
     return None
 
 
-def sample_diskstats(block_device: str = "mmcblk0") -> dict | None:
+def sample_diskstats(block_device: str) -> dict | None:
     """Read /proc/diskstats for given block device. Returns sectors r/w + IOPS.
     Sector is 512 bytes.
-    Format per line: major minor name reads_completed reads_merged sectors_read time_reading writes_completed writes_merged sectors_written time_writing ios_in_progress time_io weighted_time_io ...
     """
     try:
         for line in read_file(PROC / "diskstats").splitlines():
@@ -138,7 +137,6 @@ def sample_diskstats(block_device: str = "mmcblk0") -> dict | None:
 
 
 def sample_disk_usage(path: str = "/") -> dict:
-    """Disk usage of root filesystem via statvfs."""
     try:
         s = os.statvfs(path)
         total = s.f_blocks * s.f_frsize
@@ -156,7 +154,6 @@ def sample_disk_usage(path: str = "/") -> dict:
 
 
 def sample_netdev() -> dict:
-    """Sum RX/TX bytes per interface from /proc/net/dev (skip lo, docker, veth, br-)."""
     res = {}
     try:
         for line in read_file(PROC / "net/dev").splitlines()[2:]:
@@ -180,6 +177,82 @@ def sample_netdev() -> dict:
     return res
 
 
+# ---------------------------------------------------------------------------
+# NVMe SMART — real endurance data when block_device is NVMe
+# ---------------------------------------------------------------------------
+def is_nvme_device(block_device: str) -> bool:
+    return block_device.startswith("nvme")
+
+
+def nvme_controller_path(block_device: str) -> str:
+    """Given nvme0n1 → /dev/nvme0, nvme0 → /dev/nvme0."""
+    # strip trailing "nN" namespace suffix
+    base = block_device
+    if "n" in base[4:]:
+        # nvme<CTRL>n<NS>
+        base = base.split("n")[0] + base[4:].split("n")[0]
+        # simpler: nvme0n1 → nvme0
+        idx = block_device.find("n", 4)
+        base = block_device[:idx] if idx > 0 else block_device
+    return f"/dev/{base}"
+
+
+def sample_nvme_smart(block_device: str) -> dict | None:
+    """Run nvme smart-log (JSON) for the controller of block_device.
+    Returns dict of relevant SMART fields, or None if unavailable.
+    """
+    if not is_nvme_device(block_device):
+        return None
+    ctrl_path = nvme_controller_path(block_device)
+    try:
+        out = subprocess.run(
+            ["nvme", "smart-log", "--output-format=json", ctrl_path],
+            capture_output=True, text=True, timeout=10
+        )
+        if out.returncode != 0:
+            LOG.debug("nvme smart-log rc=%s stderr=%s", out.returncode, out.stderr[:200])
+            return None
+        data = json.loads(out.stdout)
+        # NVMe data_units are 512-byte * 1000 (see NVMe spec §5.16.1.3)
+        # So actual bytes written = data_units_written * 512 * 1000
+        data_units_written = data.get("data_units_written", 0)
+        data_units_read = data.get("data_units_read", 0)
+        # Temperature: SMART temperature is Kelvin
+        temp_k = data.get("temperature", 0)
+        temp_c = round(temp_k - 273.15, 1) if temp_k else None
+        return {
+            "percentage_used": data.get("percentage_used", 0),
+            "available_spare": data.get("available_spare", 0),
+            "available_spare_threshold": data.get("available_spare_threshold", 0),
+            "media_errors": data.get("media_errors", 0),
+            "critical_warning": data.get("critical_warning", 0),
+            "unsafe_shutdowns": data.get("unsafe_shutdowns", 0),
+            "power_cycles": data.get("power_cycles", 0),
+            "power_on_hours": data.get("power_on_hours", 0),
+            "num_err_log_entries": data.get("num_err_log_entries", 0),
+            "temperature_c": temp_c,
+            # Lifetime bytes (from chip, not since boot!)
+            "lifetime_written_bytes": data_units_written * 512 * 1000,
+            "lifetime_read_bytes": data_units_read * 512 * 1000,
+        }
+    except FileNotFoundError:
+        LOG.debug("nvme-cli not installed — falling back to estimated wear")
+        return None
+    except Exception as e:
+        LOG.warning("nvme smart-log failed: %s", e)
+        return None
+
+
+def sample_nvme_model(block_device: str) -> str | None:
+    """Read Samsung SSD 990 EVO Plus 1TB style name from /sys."""
+    if not is_nvme_device(block_device):
+        return None
+    # nvme0n1 → nvme0
+    idx = block_device.find("n", 4)
+    ctrl = block_device[:idx] if idx > 0 else block_device
+    return read_file(SYS / f"class/nvme/{ctrl}/model") or None
+
+
 def _decode_throttled(v: int, raw_hex: str) -> dict:
     return {
         "raw_hex": raw_hex,
@@ -197,27 +270,15 @@ def _decode_throttled(v: int, raw_hex: str) -> dict:
 
 
 def sample_throttled() -> dict:
-    """Read RPi throttled status. Tries (1) /sys hwmon node (modern kernels),
-    (2) vcgencmd CLI tool. Returns decoded flags or {}.
-    Bits per Pi spec:
-      0: under-voltage now
-      1: arm frequency capped now
-      2: throttled now
-      3: soft temp limit reached now
-      16+: same since boot
-    """
-    # 1) /sys: hwmon throttle counters from cpufreq driver (rpi5/cm5)
     for hw in sorted(SYS.glob("class/hwmon/hwmon*")):
         name = read_file(hw / "name")
         if "rpi" in name.lower():
             tmp = read_file(hw / "in0_lcrit_alarm")
             if tmp.isdigit():
-                # in0_lcrit_alarm: 1 = undervoltage now
                 v = 0
                 if int(tmp) == 1:
                     v |= (1 << 0)
                 return _decode_throttled(v, hex(v))
-    # 2) /sys: legacy firmware sysfs (some BSPs expose direct throttled bitmap)
     for path_candidate in [
         "/sys/devices/platform/soc/soc:firmware/get_throttled",
         "/sys/class/leds/PWR/trigger",
@@ -229,7 +290,6 @@ def sample_throttled() -> dict:
                 return _decode_throttled(v, v_str)
             except ValueError:
                 pass
-    # 3) vcgencmd
     try:
         out = subprocess.run(["vcgencmd", "get_throttled"], capture_output=True,
                              text=True, timeout=5)
@@ -244,7 +304,6 @@ def sample_throttled() -> dict:
 
 
 def sample_volts() -> dict:
-    """vcgencmd measure_volts core/sdram_c/sdram_i/sdram_p"""
     res = {}
     for src in ("core", "sdram_c", "sdram_i", "sdram_p"):
         try:
@@ -304,7 +363,11 @@ class MQTTPub:
 # ---------------------------------------------------------------------------
 # HA Auto-Discovery
 # ---------------------------------------------------------------------------
-SENSORS = [
+# NOTE on backward compat: sensor keys used to be prefixed "sd_" — kept for
+# migration compatibility so existing Lovelace references don't break. The
+# friendly names are now device-neutral ("Disk Write" / "Storage Wear") and
+# reflect the actual medium.
+SENSORS_BASE = [
     # (key, name, icon, unit, device_class, state_class, options)
     ("cpu_pct",         "CPU Auslastung",        "mdi:chip",                 "%",     None,            "measurement", {}),
     ("cpu_user_pct",    "CPU User",              "mdi:account",              "%",     None,            "measurement", {}),
@@ -327,16 +390,6 @@ SENSORS = [
     ("disk_used_gb",    "Disk belegt",           "mdi:harddisk",             "GB",    None,            "measurement", {}),
     ("disk_free_gb",    "Disk frei",             "mdi:harddisk",             "GB",    None,            "measurement", {}),
     ("disk_pct",        "Disk Auslastung",       "mdi:harddisk",             "%",     None,            "measurement", {}),
-    ("sd_read_mbs",     "SD Read jetzt",         "mdi:download-network",     "MB/s",  "data_rate",     "measurement", {}),
-    ("sd_write_mbs",    "SD Write jetzt",        "mdi:upload-network",       "MB/s",  "data_rate",     "measurement", {}),
-    ("sd_read_iops",    "SD Read IOPS",          "mdi:database-arrow-down",  "IOPS",  None,            "measurement", {}),
-    ("sd_write_iops",   "SD Write IOPS",         "mdi:database-arrow-up",    "IOPS",  None,            "measurement", {}),
-    ("sd_read_today_gb",   "SD Read heute",      "mdi:download",             "GB",    None,            "measurement", {}),
-    ("sd_write_today_gb",  "SD Write heute",     "mdi:upload",               "GB",    None,            "measurement", {}),
-    ("sd_read_total_gb",   "SD Read total",      "mdi:download-network",     "GB",    None,            "total_increasing", {}),
-    ("sd_write_total_gb",  "SD Write total",     "mdi:upload-network",       "GB",    None,            "total_increasing", {}),
-    ("sd_wear_pct",     "SD Wear-Schätzung",     "mdi:battery-heart-variant","%",     None,            "measurement", {}),
-    ("sd_years_left",   "SD Restjahre (geschätzt)", "mdi:calendar-clock",    "a",     None,            "measurement", {}),
     ("net_rx_mbs",      "Netzwerk RX",           "mdi:download",             "MB/s",  "data_rate",     "measurement", {}),
     ("net_tx_mbs",      "Netzwerk TX",           "mdi:upload",               "MB/s",  "data_rate",     "measurement", {}),
     ("net_rx_total_gb", "Netzwerk RX Total",     "mdi:download-network",     "GB",    None,            "total_increasing", {}),
@@ -347,8 +400,40 @@ SENSORS = [
     ("os_kernel",       "Kernel",                "mdi:linux",                None,    None,            None,          {}),
 ]
 
+# I/O sensors — keys kept as sd_* for existing Lovelace refs; friendly names
+# are switched to device-agnostic "Storage" wording.
+STORAGE_IO_SENSORS = [
+    ("sd_read_mbs",     "Storage Read jetzt",     "mdi:download-network",     "MB/s",  "data_rate",     "measurement", {}),
+    ("sd_write_mbs",    "Storage Write jetzt",    "mdi:upload-network",       "MB/s",  "data_rate",     "measurement", {}),
+    ("sd_read_iops",    "Storage Read IOPS",      "mdi:database-arrow-down",  "IOPS",  None,            "measurement", {}),
+    ("sd_write_iops",   "Storage Write IOPS",     "mdi:database-arrow-up",    "IOPS",  None,            "measurement", {}),
+    ("sd_read_today_gb",   "Storage Read heute",  "mdi:download",             "GB",    None,            "measurement", {}),
+    ("sd_write_today_gb",  "Storage Write heute", "mdi:upload",               "GB",    None,            "measurement", {}),
+    ("sd_read_total_gb",   "Storage Read total (seit Boot)",   "mdi:download-network",     "GB",    None, "total_increasing", {}),
+    ("sd_write_total_gb",  "Storage Write total (seit Boot)",  "mdi:upload-network",       "GB",    None, "total_increasing", {}),
+]
+
+STORAGE_WEAR_SENSORS = [
+    ("sd_wear_pct",     "Storage Wear",           "mdi:battery-heart-variant","%",     None,            "measurement", {}),
+    ("sd_years_left",   "Storage Restjahre",      "mdi:calendar-clock",       "a",     None,            "measurement", {}),
+]
+
+# NVMe-only SMART sensors (published only if nvme smart-log succeeds)
+NVME_SMART_SENSORS = [
+    ("nvme_lifetime_written_tb",  "NVMe Lifetime Written",   "mdi:harddisk-plus",        "TB",   None, "measurement", {}),
+    ("nvme_lifetime_read_tb",     "NVMe Lifetime Read",      "mdi:harddisk-plus",        "TB",   None, "measurement", {}),
+    ("nvme_available_spare",      "NVMe Available Spare",    "mdi:battery-plus-variant", "%",    None, "measurement", {}),
+    ("nvme_spare_threshold",      "NVMe Spare-Threshold",    "mdi:battery-alert",        "%",    None, "measurement", {}),
+    ("nvme_media_errors",         "NVMe Media Errors",       "mdi:alert-decagram",       None,   None, "total_increasing", {}),
+    ("nvme_critical_warning",     "NVMe Critical-Warning-Bits", "mdi:alert",             None,   None, "measurement", {}),
+    ("nvme_unsafe_shutdowns",     "NVMe Unsafe Shutdowns",   "mdi:power-plug-off",       None,   None, "total_increasing", {}),
+    ("nvme_power_cycles",         "NVMe Power-Cycles",       "mdi:power",                None,   None, "total_increasing", {}),
+    ("nvme_power_on_hours",       "NVMe Power-On Stunden",   "mdi:timer-outline",        "h",    None, "total_increasing", {}),
+    ("nvme_composite_temp_c",     "NVMe Temperatur",         "mdi:thermometer",          "°C",   "temperature", "measurement", {}),
+    ("nvme_model",                "NVMe Modell",             "mdi:harddisk",             None,   None, None, {}),
+]
+
 BINARY_SENSORS = [
-    # (key, name, icon, device_class)
     ("undervoltage_now",     "Untervoltage jetzt",      "mdi:flash-alert",     "problem"),
     ("freq_capped_now",      "Frequenz gedrosselt",     "mdi:speedometer-slow","problem"),
     ("throttled_now",        "Throttled jetzt",         "mdi:fire",            "problem"),
@@ -357,13 +442,35 @@ BINARY_SENSORS = [
     ("throttled_ever",       "Throttled seit Boot",     "mdi:fire",            "problem"),
 ]
 
+NVME_BINARY_SENSORS = [
+    ("nvme_spare_low",       "NVMe Spare unter Threshold", "mdi:battery-alert","problem"),
+    ("nvme_has_media_errors","NVMe Media-Errors detected", "mdi:alert-decagram","problem"),
+    ("nvme_critical_state",  "NVMe Critical-Warning aktiv","mdi:alert-circle", "problem"),
+]
+
 
 def disc_topic(disc_prefix: str, dom: str, dev_id: str, key: str) -> str:
     return f"{disc_prefix}/{dom}/{dev_id}_{key}/config"
 
 
+def build_sensor_list(is_nvme: bool) -> list[tuple]:
+    """Compose full sensor list depending on device type."""
+    sensors = list(SENSORS_BASE) + list(STORAGE_IO_SENSORS) + list(STORAGE_WEAR_SENSORS)
+    if is_nvme:
+        sensors += list(NVME_SMART_SENSORS)
+    return sensors
+
+
+def build_binary_sensor_list(is_nvme: bool) -> list[tuple]:
+    bs = list(BINARY_SENSORS)
+    if is_nvme:
+        bs += list(NVME_BINARY_SENSORS)
+    return bs
+
+
 def discovery_payloads(device_id: str, device_name: str, pi_model: str,
-                       state_topic: str, disc_prefix: str) -> list[tuple[str, dict]]:
+                       state_topic: str, disc_prefix: str,
+                       is_nvme: bool) -> list[tuple[str, dict]]:
     dev = {
         "identifiers": [f"rpi_{device_id}"],
         "name": device_name,
@@ -371,7 +478,7 @@ def discovery_payloads(device_id: str, device_name: str, pi_model: str,
         "model": pi_model,
     }
     out = []
-    for key, name, icon, unit, dc, sc, opts in SENSORS:
+    for key, name, icon, unit, dc, sc, opts in build_sensor_list(is_nvme):
         p = {
             "name": name,
             "uniq_id": f"{device_id}_{key}",
@@ -386,12 +493,11 @@ def discovery_payloads(device_id: str, device_name: str, pi_model: str,
             p["dev_cla"] = dc
         if sc:
             p["stat_cla"] = sc
-        # availability
         p["avty_t"] = f"{state_topic.rsplit('/', 1)[0]}/availability"
         p["pl_avail"] = "online"
         p["pl_not_avail"] = "offline"
         out.append((disc_topic(disc_prefix, "sensor", device_id, key), p))
-    for key, name, icon, dc in BINARY_SENSORS:
+    for key, name, icon, dc in build_binary_sensor_list(is_nvme):
         p = {
             "name": name,
             "uniq_id": f"{device_id}_{key}",
@@ -413,37 +519,39 @@ def discovery_payloads(device_id: str, device_name: str, pi_model: str,
 # Main
 # ---------------------------------------------------------------------------
 def compute_health_score(state: dict, alerts: dict) -> int:
-    """Composite health score 0-100. Higher = better."""
     score = 100
-    # CPU temp
     t = state.get("cpu_temp_c")
     if t:
         if t > alerts.get("cpu_temp_alert_c", 80):  score -= 25
         elif t > alerts.get("cpu_temp_warn_c", 70): score -= 10
-    # Memory
     m = state.get("mem_pct", 0)
     if m > 95:  score -= 20
     elif m > alerts.get("mem_pct_warn", 85): score -= 10
-    # Disk
     d = state.get("disk_pct", 0)
     if d > 95:  score -= 20
     elif d > alerts.get("disk_pct_warn", 85): score -= 10
-    # Throttling
     if state.get("throttled_now"):           score -= 15
     if state.get("undervoltage_now"):        score -= 15
     if state.get("throttled_ever"):          score -= 5
     if state.get("undervoltage_ever"):       score -= 5
-    # CPU load (1m)
     cpu = state.get("cpu_pct", 0)
     if cpu > 95:  score -= 10
+    # NVMe critical states
+    if state.get("nvme_critical_state"):     score -= 20
+    if state.get("nvme_has_media_errors"):   score -= 15
+    if state.get("nvme_spare_low"):          score -= 25
+    wear = state.get("sd_wear_pct", 0)
+    if wear > 90:      score -= 30
+    elif wear > 75:    score -= 15
+    elif wear > 50:    score -= 5
     return max(0, min(100, score))
 
 
 def collect_state(prev_cpu: dict | None, prev_disk: dict | None,
                   prev_net: dict | None, prev_ts: float | None,
                   block_device: str, sd_tbw_lifetime_gb: int,
-                  daily_baseline: dict, kernel: str, pi_model: str) -> tuple[dict, dict, dict, dict, float]:
-    """Sample current values, calc deltas, return state + new prev refs."""
+                  daily_baseline: dict, kernel: str, pi_model: str,
+                  is_nvme: bool, nvme_model: str | None) -> tuple[dict, dict, dict, dict, float]:
     now_ts = time.time()
     dt = (now_ts - prev_ts) if prev_ts else 1.0
 
@@ -465,7 +573,7 @@ def collect_state(prev_cpu: dict | None, prev_disk: dict | None,
     # Memory
     m = sample_meminfo()
     if m:
-        mt = m.get("MemTotal", 0) / 1024.0       # kB -> MB
+        mt = m.get("MemTotal", 0) / 1024.0
         ma = m.get("MemAvailable", m.get("MemFree", 0)) / 1024.0
         mc = (m.get("Cached", 0) + m.get("Buffers", 0)) / 1024.0
         mu = mt - ma
@@ -490,14 +598,14 @@ def collect_state(prev_cpu: dict | None, prev_disk: dict | None,
     f = sample_cpu_freq_mhz()
     if f is not None: state["cpu_freq_mhz"] = f
 
-    # Disk
+    # Disk usage
     du = sample_disk_usage("/")
     state["disk_total_gb"] = round(du["total_b"] / 1e9, 2)
     state["disk_used_gb"]  = round(du["used_b"] / 1e9, 2)
     state["disk_free_gb"]  = round(du["free_b"] / 1e9, 2)
     state["disk_pct"]      = round(du["pct"], 1)
 
-    # SD diskstats delta
+    # Storage I/O (from /proc/diskstats — same regardless of medium)
     disk_now = sample_diskstats(block_device)
     if disk_now and prev_disk:
         d_r = max(0, disk_now["sectors_read"]    - prev_disk["sectors_read"]) * 512
@@ -510,10 +618,8 @@ def collect_state(prev_cpu: dict | None, prev_disk: dict | None,
             state["sd_read_iops"]  = round(d_rc / dt, 1)
             state["sd_write_iops"] = round(d_wc / dt, 1)
     if disk_now:
-        # Lifetime cumulative
         state["sd_read_total_gb"]  = round(disk_now["sectors_read"]    * 512 / 1e9, 3)
         state["sd_write_total_gb"] = round(disk_now["sectors_written"] * 512 / 1e9, 3)
-        # Today delta — relative to baseline at midnight
         today_str = date.today().isoformat()
         if daily_baseline.get("date") != today_str:
             daily_baseline["date"] = today_str
@@ -521,15 +627,63 @@ def collect_state(prev_cpu: dict | None, prev_disk: dict | None,
             daily_baseline["write_sectors"] = disk_now["sectors_written"]
         state["sd_read_today_gb"]  = round(max(0, disk_now["sectors_read"]    - daily_baseline["read_sectors"])  * 512 / 1e9, 3)
         state["sd_write_today_gb"] = round(max(0, disk_now["sectors_written"] - daily_baseline["write_sectors"]) * 512 / 1e9, 3)
-        # Wear estimate: % of SD-TBW used so far cumulatively
-        if sd_tbw_lifetime_gb > 0:
-            state["sd_wear_pct"] = round(state["sd_write_total_gb"] / sd_tbw_lifetime_gb * 100, 2)
-            # Years left based on writes per day estimate via uptime
+
+    # Wear + Years-Left — two paths
+    smart = sample_nvme_smart(block_device) if is_nvme else None
+    if smart is not None:
+        # Real SMART data — chip-reported wear
+        state["sd_wear_pct"] = float(smart["percentage_used"])
+        life_w_tb = smart["lifetime_written_bytes"] / 1e12
+        life_r_tb = smart["lifetime_read_bytes"] / 1e12
+        state["nvme_lifetime_written_tb"] = round(life_w_tb, 3)
+        state["nvme_lifetime_read_tb"] = round(life_r_tb, 3)
+        state["nvme_available_spare"] = smart["available_spare"]
+        state["nvme_spare_threshold"] = smart["available_spare_threshold"]
+        state["nvme_media_errors"] = smart["media_errors"]
+        state["nvme_critical_warning"] = smart["critical_warning"]
+        state["nvme_unsafe_shutdowns"] = smart["unsafe_shutdowns"]
+        state["nvme_power_cycles"] = smart["power_cycles"]
+        state["nvme_power_on_hours"] = smart["power_on_hours"]
+        if smart["temperature_c"] is not None:
+            state["nvme_composite_temp_c"] = smart["temperature_c"]
+        if nvme_model:
+            state["nvme_model"] = nvme_model.strip()
+        # Binary states
+        state["nvme_spare_low"] = smart["available_spare"] < smart["available_spare_threshold"]
+        state["nvme_has_media_errors"] = smart["media_errors"] > 0
+        state["nvme_critical_state"] = smart["critical_warning"] > 0
+
+        # Years-left projection using SMART-reported wear.
+        # Two independent estimates, use the more conservative:
+        #  (a) TBW-based: (nominal_tbw_gb - lifetime_written_gb) / (writes/day)
+        #  (b) Percentage-Used trajectory: given 1% takes X hours, 99% takes 99*X
+        pu = float(smart["percentage_used"])
+        poh = int(smart["power_on_hours"])
+        years_a = None
+        years_b = None
+        life_w_gb = smart["lifetime_written_bytes"] / 1e9
+        if sd_tbw_lifetime_gb > 0 and poh > 24:
+            writes_per_day = life_w_gb * 24 / poh
+            remaining_gb = max(0, sd_tbw_lifetime_gb - life_w_gb)
+            if writes_per_day > 0.01:
+                years_a = remaining_gb / writes_per_day / 365
+        if pu > 0 and poh > 24:
+            # PU% per hour, extrapolate to 100%
+            hours_per_pct = poh / pu
+            remaining_pct = max(0, 100 - pu)
+            years_b = (hours_per_pct * remaining_pct) / (24 * 365)
+        candidates = [y for y in (years_a, years_b) if y is not None]
+        if candidates:
+            state["sd_years_left"] = round(min(candidates), 1)
+    else:
+        # Fallback: estimated wear from TBW annotation + since-boot writes
+        if disk_now and sd_tbw_lifetime_gb > 0:
+            state["sd_wear_pct"] = round(state.get("sd_write_total_gb", 0) / sd_tbw_lifetime_gb * 100, 2)
             ups = sample_uptime_seconds()
             if ups > 3600:
-                writes_per_day = state["sd_write_total_gb"] * 86400 / ups
+                writes_per_day = state.get("sd_write_total_gb", 0) * 86400 / ups
                 if writes_per_day > 0.01:
-                    remaining = max(0, sd_tbw_lifetime_gb - state["sd_write_total_gb"])
+                    remaining = max(0, sd_tbw_lifetime_gb - state.get("sd_write_total_gb", 0))
                     state["sd_years_left"] = round(remaining / writes_per_day / 365, 1)
 
     # Network
@@ -550,7 +704,7 @@ def collect_state(prev_cpu: dict | None, prev_disk: dict | None,
         state["net_rx_total_gb"] = round(total_rx / 1e9, 3)
         state["net_tx_total_gb"] = round(total_tx / 1e9, 3)
 
-    # Throttling (vcgencmd, RPi only)
+    # Throttling
     th = sample_throttled()
     for k in ("undervoltage_now","freq_capped_now","throttled_now","soft_temp_limit_now",
               "undervoltage_ever","freq_capped_ever","throttled_ever","soft_temp_limit_ever"):
@@ -575,7 +729,6 @@ def main():
         format="%(asctime)s %(levelname)s %(message)s",
     )
 
-    # ---- Load config -----------------------------------------------------
     cfg_path = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("RPI_MONITOR_CFG", "/data/options.json")
     try:
         cfg = json.loads(Path(cfg_path).read_text())
@@ -600,7 +753,13 @@ def main():
     mqtt_user = os.environ.get("RPI_MQTT_USER") or cfg["mqtt"].get("username") or ""
     mqtt_pass = os.environ.get("RPI_MQTT_PASS") or cfg["mqtt"].get("password") or ""
 
-    LOG.info("Monitoring %s (id=%s) → MQTT %s:%s every %ds", dev_name, dev_id, mqtt_host, mqtt_port, interval)
+    is_nvme = is_nvme_device(block_dev)
+    nvme_model = sample_nvme_model(block_dev) if is_nvme else None
+
+    LOG.info("Monitoring %s (id=%s, block=%s%s) → MQTT %s:%s every %ds",
+             dev_name, dev_id, block_dev,
+             f" NVMe:{nvme_model.strip()}" if nvme_model else "",
+             mqtt_host, mqtt_port, interval)
 
     state_topic   = f"{state_topic_prefix}/{dev_id}/state"
     avail_topic   = f"{state_topic_prefix}/{dev_id}/availability"
@@ -613,18 +772,16 @@ def main():
     mq = MQTTPub(mqtt_host, mqtt_port, mqtt_user, mqtt_pass)
     mq.connect()
 
-    # wait for connection up to 10s
     for _ in range(20):
         if mq.connected: break
         time.sleep(0.5)
 
-    # publish discovery once
-    for topic, payload in discovery_payloads(dev_id, dev_name, pi_model,
-                                              state_topic, disc_prefix):
+    # Republish discovery every start so schema changes propagate
+    payloads = discovery_payloads(dev_id, dev_name, pi_model, state_topic, disc_prefix, is_nvme)
+    for topic, payload in payloads:
         mq.publish(topic, json.dumps(payload), retain=True)
-    LOG.info("Published %d discovery configs", len(SENSORS)+len(BINARY_SENSORS))
+    LOG.info("Published %d discovery configs (NVMe=%s)", len(payloads), is_nvme)
 
-    # availability online
     mq.publish(avail_topic, "online", retain=True)
 
     # ---- Sample loop ----------------------------------------------------
@@ -642,7 +799,6 @@ def main():
     prev_ts = None
     daily_baseline = {"date": None, "read_sectors": 0, "write_sectors": 0}
 
-    # Warm-up sample (for first delta)
     prev_cpu = sample_cpu_times()
     prev_disk = sample_diskstats(block_dev)
     prev_net = sample_netdev()
@@ -653,7 +809,8 @@ def main():
         try:
             state, prev_cpu, prev_disk, prev_net, prev_ts = collect_state(
                 prev_cpu, prev_disk, prev_net, prev_ts,
-                block_dev, sd_tbw, daily_baseline, kernel, pi_model
+                block_dev, sd_tbw, daily_baseline, kernel, pi_model,
+                is_nvme, nvme_model
             )
             state["health_score"] = compute_health_score(state, alerts)
             state["ts"] = datetime.now(timezone.utc).isoformat()
@@ -663,7 +820,6 @@ def main():
         except Exception as e:
             LOG.exception("Sample loop error: %s", e)
 
-        # Sleep with stop-check
         for _ in range(interval):
             if stop: break
             time.sleep(1)

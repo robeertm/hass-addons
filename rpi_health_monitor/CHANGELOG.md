@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.3 — 2026-07-01
+- **NVMe SMART support**: when the configured `disk.block_device` starts with `nvme`,
+  the add-on now runs `nvme smart-log --output-format=json` and reports **real
+  chip-reported endurance** instead of estimated TBW ratios. New sensors: Lifetime
+  Written/Read (TB), Available Spare (%), Media Errors, Critical Warning bits,
+  Unsafe Shutdowns, Power-Cycles, Power-On Hours, Composite Temperature, Model.
+- Storage sensor friendly names switched to device-neutral wording ("Storage Write"
+  instead of "SD Write") so they read correctly on NVMe/SSD/eMMC hosts.
+- Sensor keys (`sd_*`) kept for backward compatibility — existing Lovelace
+  references keep working; new NVMe sensors use `nvme_*` prefix.
+- `nvme-cli` added to the Alpine image (~2 MB). Also usable by future USB-SSD
+  migrations (SanDisk Extreme Portable, USB-NVMe adapters).
+- Two independent years-left estimates (TBW-linear + Percentage-Used trajectory);
+  the more conservative wins. Fixes the "0.0 years" glitch on newly-flashed NVMe.
+
 ## 1.0.2 — 2026-07-01
 - Optional idempotent HA `configuration.yaml` patcher (`config_patcher.enabled: true`).
   Sets `recorder.commit_interval` to a target value (default 60) to reduce SQLite
