@@ -213,25 +213,44 @@ def sample_nvme_smart(block_device: str) -> dict | None:
             LOG.debug("nvme smart-log rc=%s stderr=%s", out.returncode, out.stderr[:200])
             return None
         data = json.loads(out.stdout)
-        # NVMe data_units are 512-byte * 1000 (see NVMe spec §5.16.1.3)
-        # So actual bytes written = data_units_written * 512 * 1000
-        data_units_written = data.get("data_units_written", 0)
-        data_units_read = data.get("data_units_read", 0)
-        # Temperature: SMART temperature is Kelvin
-        temp_k = data.get("temperature", 0)
+        def _to_int(x, default=0):
+            """Coerce nvme-cli JSON value → int. Strips thousands separators
+            and trailing units ('%', ' C', etc.); nvme-cli can emit either."""
+            if x is None:
+                return default
+            if isinstance(x, (int, float)):
+                return int(x)
+            try:
+                s = str(x).strip().replace(",", "")
+                # keep leading sign + digits only
+                buf = ""
+                for i, ch in enumerate(s):
+                    if ch.isdigit() or (i == 0 and ch in "+-"):
+                        buf += ch
+                    else:
+                        break
+                return int(buf) if buf and buf not in ("+", "-") else default
+            except (ValueError, TypeError):
+                return default
+
+        # NVMe data_units are 512-byte * 1000 (NVMe spec §5.16.1.3).
+        # nvme-cli JSON keys use short names (percent_used, avail_spare, ...)
+        # and emit large counters as comma-thousands strings.
+        data_units_written = _to_int(data.get("data_units_written"))
+        data_units_read = _to_int(data.get("data_units_read"))
+        temp_k = _to_int(data.get("temperature"))
         temp_c = round(temp_k - 273.15, 1) if temp_k else None
         return {
-            "percentage_used": data.get("percentage_used", 0),
-            "available_spare": data.get("available_spare", 0),
-            "available_spare_threshold": data.get("available_spare_threshold", 0),
-            "media_errors": data.get("media_errors", 0),
-            "critical_warning": data.get("critical_warning", 0),
-            "unsafe_shutdowns": data.get("unsafe_shutdowns", 0),
-            "power_cycles": data.get("power_cycles", 0),
-            "power_on_hours": data.get("power_on_hours", 0),
-            "num_err_log_entries": data.get("num_err_log_entries", 0),
+            "percentage_used": _to_int(data.get("percent_used", data.get("percentage_used"))),
+            "available_spare": _to_int(data.get("avail_spare", data.get("available_spare"))),
+            "available_spare_threshold": _to_int(data.get("spare_thresh", data.get("available_spare_threshold"))),
+            "media_errors": _to_int(data.get("media_errors")),
+            "critical_warning": _to_int(data.get("critical_warning")),
+            "unsafe_shutdowns": _to_int(data.get("unsafe_shutdowns")),
+            "power_cycles": _to_int(data.get("power_cycles")),
+            "power_on_hours": _to_int(data.get("power_on_hours")),
+            "num_err_log_entries": _to_int(data.get("num_err_log_entries")),
             "temperature_c": temp_c,
-            # Lifetime bytes (from chip, not since boot!)
             "lifetime_written_bytes": data_units_written * 512 * 1000,
             "lifetime_read_bytes": data_units_read * 512 * 1000,
         }
@@ -653,28 +672,20 @@ def collect_state(prev_cpu: dict | None, prev_disk: dict | None,
         state["nvme_has_media_errors"] = smart["media_errors"] > 0
         state["nvme_critical_state"] = smart["critical_warning"] > 0
 
-        # Years-left projection using SMART-reported wear.
-        # Two independent estimates, use the more conservative:
-        #  (a) TBW-based: (nominal_tbw_gb - lifetime_written_gb) / (writes/day)
-        #  (b) Percentage-Used trajectory: given 1% takes X hours, 99% takes 99*X
+        # Years-left projection using chip-reported Percentage-Used trajectory.
+        # This is the honest metric: given PU% took power_on_hours to accumulate,
+        # extrapolate linearly to 100%. (Wear is not perfectly linear but it's
+        # the manufacturer's own model — better than a user-annotated TBW.)
         pu = float(smart["percentage_used"])
         poh = int(smart["power_on_hours"])
-        years_a = None
-        years_b = None
-        life_w_gb = smart["lifetime_written_bytes"] / 1e9
-        if sd_tbw_lifetime_gb > 0 and poh > 24:
-            writes_per_day = life_w_gb * 24 / poh
-            remaining_gb = max(0, sd_tbw_lifetime_gb - life_w_gb)
-            if writes_per_day > 0.01:
-                years_a = remaining_gb / writes_per_day / 365
         if pu > 0 and poh > 24:
-            # PU% per hour, extrapolate to 100%
             hours_per_pct = poh / pu
             remaining_pct = max(0, 100 - pu)
-            years_b = (hours_per_pct * remaining_pct) / (24 * 365)
-        candidates = [y for y in (years_a, years_b) if y is not None]
-        if candidates:
-            state["sd_years_left"] = round(min(candidates), 1)
+            state["sd_years_left"] = round((hours_per_pct * remaining_pct) / (24 * 365), 1)
+        elif pu == 0 and poh > 24:
+            # Chip hasn't registered any wear yet — extrapolation impossible.
+            # Report a floor of "> 100 years" so the sensor is not misinterpreted as 0.
+            state["sd_years_left"] = 100.0
     else:
         # Fallback: estimated wear from TBW annotation + since-boot writes
         if disk_now and sd_tbw_lifetime_gb > 0:

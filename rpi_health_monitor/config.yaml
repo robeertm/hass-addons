@@ -1,5 +1,5 @@
 name: RPi Health Monitor
-version: "1.0.3"
+version: "1.0.4"
 slug: rpi_health_monitor
 description: Monitor RPi/HAOS host (CPU/Mem/Disk/Temp/SD-IO/Throttling/Network) via /proc + /sys, publish to MQTT with HA Auto-Discovery. Daily SD-write tracking + endurance estimation. Optional idempotent recorder.commit_interval patcher to reduce SD/SSD write amplification.
 url: https://github.com/robeertm/hass-addons

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.4 — 2026-07-01
+- Fix NVMe SMART JSON parsing: nvme-cli emits short field names (`percent_used`,
+  `avail_spare`, `spare_thresh`) and encodes large counters as comma-separated
+  strings — corrected field lookup + robust int coercion (strips `,` / `%` /
+  units) with fallbacks so pre-existing long-form names still work if a newer
+  release changes back.
+- Fix `sd_years_left` regression on healthy NVMe: previous logic took `min()`
+  of two estimates including a TBW-based one that could hit 0 when a user
+  under-annotated `sd_tbw_lifetime_gb`. Now uses chip-reported Percentage-Used
+  trajectory exclusively when SMART is available (honest, self-reported).
+
 ## 1.0.3 — 2026-07-01
 - **NVMe SMART support**: when the configured `disk.block_device` starts with `nvme`,
   the add-on now runs `nvme smart-log --output-format=json` and reports **real
