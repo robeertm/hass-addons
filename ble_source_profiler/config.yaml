@@ -1,0 +1,65 @@
+name: BLE Source Profiler
+version: "1.0.0"
+slug: ble_source_profiler
+description: >-
+  Subscribes to HA bluetooth/subscribe_advertisements for a configurable
+  window every N seconds, aggregates per-source RSSI + advert stats, and
+  publishes MQTT-Discovery sensors for a comparative Lovelace view of
+  multiple BLE-Proxies / BlueZ dongles.
+url: https://github.com/robeertm/hass-addons
+arch:
+  - aarch64
+  - amd64
+  - armv7
+  - armhf
+init: false
+boot: auto
+startup: services
+hassio_role: default
+hassio_api: false
+homeassistant_api: false
+host_network: false
+panel_icon: mdi:radar
+options:
+  log_level: info
+  ha:
+    url: "ws://homeassistant.local.hass.io:8123/api/websocket"
+    token: ""
+  sample:
+    sweep_seconds: 50
+    poll_interval_seconds: 60
+  sources:
+    - mac: "AA:BB:CC:DD:EE:FF"
+      name: "Atom 1"
+      key: "atom_1"
+    - mac: "11:22:33:44:55:66"
+      name: "Atom 2"
+      key: "atom_2"
+  mqtt:
+    broker: core-mosquitto
+    port: 1883
+    username: ""
+    password: ""
+    discovery_prefix: homeassistant
+    device_prefix: ble_source
+    device_name: "BLE Source Profiler"
+schema:
+  log_level: list(trace|debug|info|notice|warning|error|fatal)
+  ha:
+    url: str
+    token: str?
+  sample:
+    sweep_seconds: int(10,120)
+    poll_interval_seconds: int(30,600)
+  sources:
+    - mac: match(^[0-9A-Fa-f:]+$)
+      name: str
+      key: match(^[a-z0-9_]+$)
+  mqtt:
+    broker: str
+    port: port
+    username: str?
+    password: password?
+    discovery_prefix: str
+    device_prefix: str
+    device_name: str
