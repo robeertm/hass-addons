@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.5 — 2026-07-08
+- Mars-grade MQTT resilience: `connect()` now retries the initial connect forever
+  with exponential backoff (2→30s) instead of swallowing the error and running
+  disconnected — fixes the case where the add-on starts before the broker (e.g.
+  after a host reboot) and never (re)connects (process alive, publishing nothing).
+- `reconnect_delay_set(1, 30)` for robust auto-reconnect after an established drop.
+- Last-Will `<availability> = offline` (retained) so HA marks entities unavailable
+  immediately if the add-on/broker dies.
+- Republish all discovery configs + `online` on **every** (re)connect via an
+  `on_ready` hook, so a broker restart that drops retained messages self-recovers.
+
 ## 1.0.4 — 2026-07-01
 - Fix NVMe SMART JSON parsing: nvme-cli emits short field names (`percent_used`,
   `avail_spare`, `spare_thresh`) and encodes large counters as comma-separated

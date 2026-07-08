@@ -354,11 +354,17 @@ class MQTTPub:
         self.host = host
         self.port = port
         self.connected = False
+        self.on_ready = None
 
     def _on_connect(self, c, userdata, flags, reason_code, properties):
         if reason_code == 0:
             LOG.info("MQTT connected to %s:%s", self.host, self.port)
             self.connected = True
+            if self.on_ready:
+                try:
+                    self.on_ready()
+                except Exception as e:
+                    LOG.warning("on_ready failed: %s", e)
         else:
             LOG.warning("MQTT connect failed: %s", reason_code)
 
@@ -367,11 +373,17 @@ class MQTTPub:
         self.connected = False
 
     def connect(self):
-        try:
-            self.client.connect(self.host, self.port, keepalive=60)
-            self.client.loop_start()
-        except Exception as e:
-            LOG.warning("MQTT connect error: %s", e)
+        self.client.reconnect_delay_set(min_delay=1, max_delay=30)
+        self.client.loop_start()
+        delay = 2
+        while True:
+            try:
+                self.client.connect(self.host, self.port, keepalive=60)
+                return
+            except Exception as e:
+                LOG.warning("MQTT connect error, retry in %ss: %s", delay, e)
+                time.sleep(delay)
+                delay = min(delay * 2, 30)
 
     def publish(self, topic: str, payload: str, retain: bool = False):
         if not self.connected:
@@ -781,19 +793,25 @@ def main():
 
     # ---- MQTT -----------------------------------------------------------
     mq = MQTTPub(mqtt_host, mqtt_port, mqtt_user, mqtt_pass)
+    payloads = discovery_payloads(dev_id, dev_name, pi_model, state_topic, disc_prefix, is_nvme)
+
+    def _republish_all():
+        for topic, payload in payloads:
+            mq.publish(topic, json.dumps(payload), retain=True)
+        mq.publish(avail_topic, "online", retain=True)
+        LOG.info("(Re)published %d discovery configs + online (NVMe=%s)", len(payloads), is_nvme)
+
+    # Last-Will so HA sees 'offline' immediately if the service/broker dies,
+    # and republish everything on every (re)connect (survives broker restart).
+    mq.client.will_set(avail_topic, "offline", retain=True)
+    mq.on_ready = _republish_all
     mq.connect()
 
     for _ in range(20):
         if mq.connected: break
         time.sleep(0.5)
 
-    # Republish discovery every start so schema changes propagate
-    payloads = discovery_payloads(dev_id, dev_name, pi_model, state_topic, disc_prefix, is_nvme)
-    for topic, payload in payloads:
-        mq.publish(topic, json.dumps(payload), retain=True)
-    LOG.info("Published %d discovery configs (NVMe=%s)", len(payloads), is_nvme)
-
-    mq.publish(avail_topic, "online", retain=True)
+    _republish_all()
 
     # ---- Sample loop ----------------------------------------------------
     stop = False
