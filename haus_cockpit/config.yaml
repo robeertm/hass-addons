@@ -17,7 +17,13 @@ homeassistant_api: false
 host_network: true
 ingress: false
 panel_icon: mdi:view-dashboard-variant
-webui: http://[HOST]:8099
+webui: http://[HOST]:[PORT:8099]
+ports:
+  "8099/tcp": 8099
+ports_description:
+  "8099/tcp": Web UI (HTTP) — im Browser aufrufen
+map:
+  - share:rw
 options:
   ha_base_url: "http://127.0.0.1:8123"
   ha_token: ""
