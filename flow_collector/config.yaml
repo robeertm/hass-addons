@@ -1,0 +1,41 @@
+name: Flow Collector (IPFIX/GeoIP)
+version: "1.0.0"
+slug: flow_collector
+description: IPFIX/NetFlow-v10-Collector mit GeoIP — per-Gerät-Traffic, Top-Länder/Dienste/Hosts, VLANs. Speist das HAUS-Cockpit-Security-Panel (:3002/api/state). Read-only.
+url: https://github.com/robeertm/hass-addons/tree/main/flow_collector
+arch:
+  - aarch64
+  - amd64
+  - armv7
+init: false
+boot: auto
+startup: services
+hassio_role: default
+hassio_api: false
+homeassistant_api: false
+host_network: true
+ingress: false
+ports:
+  "2055/udp": 2055
+  "3002/tcp": 3002
+ports_description:
+  "2055/udp": NetFlow/IPFIX-Empfang von der UDM (Collector-Ziel)
+  "3002/tcp": HTTP-API (/api/state · /healthz) — vom Cockpit gelesen
+options:
+  ha_base_url: "http://127.0.0.1:8123"
+  ha_token: ""
+  top_n: 30
+  hostname_refresh_sec: 120
+  history_buckets: 144
+  vlan_names_json: "{}"
+  subnet_vlan_json: "{}"
+  local_v6_gua: ""
+schema:
+  ha_base_url: str
+  ha_token: str?
+  top_n: int(5,200)
+  hostname_refresh_sec: int(30,3600)
+  history_buckets: int(12,1440)
+  vlan_names_json: str?
+  subnet_vlan_json: str?
+  local_v6_gua: str?

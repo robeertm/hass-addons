@@ -1,0 +1,9 @@
+build_from:
+  aarch64: ghcr.io/home-assistant/aarch64-base-python:3.12-alpine3.20
+  amd64: ghcr.io/home-assistant/amd64-base-python:3.12-alpine3.20
+  armv7: ghcr.io/home-assistant/armv7-base-python:3.12-alpine3.20
+labels:
+  org.opencontainers.image.title: "Flow Collector Add-on (IPFIX/GeoIP)"
+  org.opencontainers.image.description: "IPFIX/NetFlow v10 collector with GeoIP enrichment"
+  org.opencontainers.image.source: "https://github.com/robeertm/hass-addons"
+  org.opencontainers.image.licenses: "MIT"
