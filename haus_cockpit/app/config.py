@@ -59,6 +59,14 @@ MIKE_FLOWCOL_URL = os.environ.get(
 NEXTDNS_API_KEY = os.environ.get("NEXTDNS_API_KEY", "")
 NEXTDNS_PROFILE = os.environ.get("NEXTDNS_PROFILE", "")
 
+# ── SNMP (read-only SNMPv3 authPriv per-port UDM interface counters) ────────
+SNMP_USER = os.environ.get("SNMP_USER", "")
+SNMP_AUTH_PASS = os.environ.get("SNMP_AUTH_PASS", "")
+SNMP_PRIV_PASS = os.environ.get("SNMP_PRIV_PASS", "")
+SNMP_POLL_SEC = int(os.environ.get("SNMP_POLL_SEC", "30"))
+RAD_SNMP_HOST = os.environ.get("SNMP_HOST", "10.30.1.1")            # Robert UDM
+MIKE_SNMP_HOST = os.environ.get("MIKE_SNMP_HOST", "10.10.2.1")      # Mike UDM (local on his box, WG from Robert's)
+
 # ── Service registry ────────────────────────────────────────────────────────
 _RAD_SERVICES = [
     {"key": "flow-collector", "label": "flow-collector", "icon": "network",
@@ -113,12 +121,12 @@ _RADEBERG = {
     "key": "radeberg", "name": "Radeberg", "who": "Robert & Steffi",
     "accent": "mauve", "live": True,
     "panels": ["services", "security", "energy", "climate",
-               "sensors", "pi", "udm", "network", "docker"],
+               "sensors", "pi", "udm", "snmp", "network", "docker"],
     "pi_topic": "rpi_health/robert_pi/state",
     "udm_topic": "udm_health/radeberg/state",
     "shelly_prefix": "shelly_analyzer", "flow_prefix": "flowcol",
     "ha_url": HA_URL, "ha_token": HA_TOKEN,
-    "flowcol_url": RAD_FLOWCOL_URL,
+    "flowcol_url": RAD_FLOWCOL_URL, "snmp_host": RAD_SNMP_HOST,
     "nextdns_key": NEXTDNS_API_KEY, "nextdns_profile": NEXTDNS_PROFILE,
     "docker": True,
 }
@@ -126,13 +134,13 @@ _KLIPPHAUSEN = {
     "key": "klipphausen", "name": "Klipphausen", "who": "Mike",
     "accent": "teal", "live": True,
     "panels": ["services", "solar", "security", "climate",
-               "sensors", "pi", "udm", "ble"],
+               "sensors", "pi", "udm", "snmp", "ble"],
     "pi_topic": _kp("rpi_health/mike_pi/state"),
     "udm_topic": _kp("udm_health/sonnenrain/state"),
     "ble_prefix": _kp("mike_ble_source").rstrip("/") if KLIPP_PREFIX else "mike_ble_source",
     "bridge_status_topic": _kp("bridge/status") if not _IS_MIKE else None,
     "ha_url": MIKE_HA_URL, "ha_token": MIKE_HA_TOKEN,
-    "flowcol_url": MIKE_FLOWCOL_URL,
+    "flowcol_url": MIKE_FLOWCOL_URL, "snmp_host": MIKE_SNMP_HOST,
     "nextdns_key": "", "nextdns_profile": "",     # Mike has no NextDNS
     "docker": False,                               # HAOS add-on has no docker socket
 }

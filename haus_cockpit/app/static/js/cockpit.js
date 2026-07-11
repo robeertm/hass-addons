@@ -181,7 +181,11 @@ function buildPanel(name,h){
     $(".cbody",c).innerHTML=`<div class="sec-live" id="sec-live"></div>
       <div class="sec-cols"><div><div class="sec-h">🌍 Top-Länder</div><div class="barlist" id="sec-countries"></div></div>
       <div><div class="sec-h">🔌 Top-Dienste</div><div class="barlist" id="sec-services"></div></div></div>
+      <div class="sec-nextdns" id="sec-nextdns"></div>
       <div class="sec-note" id="sec-note"></div>`;return c;}
+  if(name==="snmp"){const c=card("half","network",h.key==="klipphausen"?"UDM Ports · Sonnenrain":"UDM Ports · Radeberg","var(--sapphire)","SNMP");
+    $(".cbody",c).innerHTML=`<div class="tag" id="snmp-sub" style="margin-bottom:10px;font-family:var(--mono);font-size:.7rem;color:var(--overlay1)"></div>
+      <div class="barlist" id="snmp-ports"></div>`;return c;}
   if(name==="climate"){const c=card("half","thermo","Klima · Räume","var(--sky)");
     $(".cbody",c).innerHTML=`<div class="clima-grid" id="clima-grid"></div>`;return c;}
   if(name==="sensors"){const c=card("","grid","Alle Sensoren","var(--lavender)");
@@ -251,6 +255,7 @@ function updateHouse(host,h){
   if($("#sec-live")) updateSecurity(h.security);
   if($("#clima-grid")) updateClimate(h.climate);
   if($("#sens-mini")) updateSensors(h.sensors_summary,h.key);
+  if($("#snmp-ports")) updateSnmp(h.snmp);
 }
 
 function updatePi(pi){
@@ -851,6 +856,22 @@ function updateSecurity(sec){
     $("#sec-countries").innerHTML=`<div class="sec-empty">flow-collector nicht aktiv — nur UniFi-WAN.<br>NetFlow auf UDM → dieser Host aktivieren.</div>`;
     $("#sec-services").innerHTML="";
   }
+  // NextDNS section (prominent)
+  const ndhost=$("#sec-nextdns");
+  if(ndhost){
+    const det=secDetail[activeHouse]; const nd=det&&det.nextdns;
+    if(sec.nextdns_enabled && (nd || sec.nd_block_pct!=null)){
+      const pct=(nd&&nd.block_pct!=null)?nd.block_pct:sec.nd_block_pct;
+      const q=(nd&&nd.queries)||sec.nd_queries, b=(nd&&nd.blocked)||sec.nd_blocked;
+      const blk=(nd&&nd.top_blocked)||[];
+      ndhost.innerHTML=`<div class="ndx-head"><span class="ndx-ic">🛡</span><b>NextDNS</b>
+        <span class="ndx-stat">${nf(q,0)} Anfragen · <span class="ndx-b">${nf(b,0)} blockiert</span> · <b>${pct!=null?nf(pct,1):'–'}%</b></span></div>
+        <div class="ndx-bar"><div class="ndx-fill" style="width:${clamp(pct||0,1.5,100)}%"></div></div>
+        ${blk.length?`<div class="ndx-chips">`+blk.slice(0,8).map(x=>`<span class="chip bad"><span class="led"></span>${x.domain}</span>`).join("")+`</div>`:''}`;
+    } else if(sec.nextdns_enabled){
+      ndhost.innerHTML=`<div class="ndx-head"><span class="ndx-ic">🛡</span><b>NextDNS</b><span class="ndx-stat">lädt…</span></div>`;
+    } else { ndhost.innerHTML=""; }
+  }
   const parts=[];
   parts.push(sec.flow_enabled?"🟢 flow-collector":"⚪ flow-collector aus");
   parts.push(sec.nextdns_enabled?"🟢 NextDNS":"⚪ NextDNS");
@@ -967,6 +988,38 @@ function openSensorsModal(focusGroup){
   document.body.appendChild(ov);
   const close=wireClose(ov);
   const q=$("#sens-q",ov); if(q&&q.focus)q.focus();
+  // ── lazy per-sensor sparklines: fetch history only for visible rows, batched ──
+  const pending=new Map(); let flushT=null;
+  function schedule(){ if(!flushT) flushT=setTimeout(flush,160); }
+  function flush(){
+    flushT=null;
+    const batch=[...pending.keys()].slice(0,40);
+    if(!batch.length)return;
+    const rows=batch.map(e=>{const r=pending.get(e);pending.delete(e);return [e,r];});
+    fetchEntityHistory(house,batch,6).then(series=>{
+      rows.forEach(([eid,row])=>{
+        if(!row.isConnected)return;
+        const cv=row.querySelector(".si-spark"); if(!cv)return;
+        const pts=(series&&series[eid])||[];
+        row._drawn=true; drawSpark(cv,pts,sparkColorFor(row),1);
+        if(!pts.length)row.classList.add("no-hist");
+      });
+    }).catch(()=>{});
+    if(pending.size)flushT=setTimeout(flush,160);
+  }
+  if(typeof IntersectionObserver==="function"){
+    ov._sensObs=new IntersectionObserver((entries)=>{
+      entries.forEach(en=>{
+        if(!en.isIntersecting)return;
+        const row=en.target; if(row._drawn)return;
+        const eid=row.dataset.eid, cv=row.querySelector(".si-spark"); if(!cv)return;
+        const cached=entHistCache[house+"|"+eid+"|6"];
+        if(cached && Date.now()-cached.ts<60000){ row._drawn=true; drawSpark(cv,cached.pts,sparkColorFor(row),1); if(!cached.pts.length)row.classList.add("no-hist"); ov._sensObs.unobserve(row); return; }
+        pending.set(eid,row); ov._sensObs.unobserve(row); schedule();
+      });
+    },{root:$(".modal",ov),rootMargin:"140px 0px"});
+  }
+  const _origClose=close;
   function render(data){
     const groups=(data.explorer&&data.explorer.groups)||[];
     const total=(data.explorer&&data.explorer.total)||0;
@@ -988,13 +1041,18 @@ function openSensorsModal(focusGroup){
       sec.innerHTML=`<div class="sg-head">${g.is_room?"🏠 ":""}${g.name}<span class="sg-n">${items.length}</span></div>
         <div class="sg-items"></div>`;
       const box=$(".sg-items",sec);
-      items.slice(0,term?400:120).forEach(it=>{
-        const val=it.num!=null?nf(it.num,Number.isInteger(it.num)?0:2):(it.state||"–");
+      items.forEach(it=>{
+        const isNum=(typeof it.num==="number");
+        const val=isNum?nf(it.num,Number.isInteger(it.num)?0:2):(it.state||"–");
         const unit=it.unit?`<span class="si-u">${it.unit}</span>`:"";
-        const d=el("div","si "+it.domain);
+        const d=el("div","si "+it.domain+(isNum?" num":""));
+        d.dataset.eid=it.entity_id; if(isNum)d.dataset.num="1";
         d.innerHTML=`<span class="si-n" title="${it.entity_id}">${it.name||it.entity_id}</span>
+          ${isNum?'<canvas class="si-spark"></canvas>':'<span class="si-spark-x"></span>'}
           <span class="si-v">${val}${unit}</span>`;
+        d.onclick=()=>openEntityModal(house,it);
         box.appendChild(d);
+        if(isNum && ov._sensObs) ov._sensObs.observe(d);
       });
       host.appendChild(sec);
     });
@@ -1027,7 +1085,72 @@ function updateClimate(rooms){
   });
 }
 
-/* ── v2/v3 init ── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   v4 — per-sensor history (every entity), entity drill-down, SNMP per-port
+   ═══════════════════════════════════════════════════════════════════════════ */
+const entHistCache={};   // "house|eid|hours" -> {pts:[[t,v]], ts}
+function fetchEntityHistory(house,eids,hours){
+  hours=hours||6; const now=Date.now(), out={}, need=[];
+  eids.forEach(e=>{const c=entHistCache[house+"|"+e+"|"+hours];
+    if(c && now-c.ts<60000){out[e]=c.pts;} else need.push(e);});
+  if(!need.length) return Promise.resolve(out);
+  const url="/api/entity_history?house="+encodeURIComponent(house)+"&hours="+hours+
+            "&entities="+encodeURIComponent(need.join(","));
+  return fetch(url,{cache:"no-store"}).then(r=>r.json()).then(d=>{
+    const series=d.series||{};
+    need.forEach(e=>{const pts=series[e]||[]; entHistCache[house+"|"+e+"|"+hours]={pts,ts:Date.now()}; out[e]=pts;});
+    return out;
+  }).catch(()=>out);
+}
+function sparkColorFor(row){
+  const e=((row&&row.dataset&&row.dataset.eid)||"").toLowerCase();
+  if(/temp|klima|thermo/.test(e))return COL.peach;
+  if(/power|leistung|energie|energy|watt|_w$|kwh|current|strom|voltage|spannung/.test(e))return COL.yellow;
+  if(/batter|akku|soc/.test(e))return COL.green;
+  if(/cpu|load|mem|ram|disk|swap|nvme/.test(e))return COL.blue;
+  if(/humid|feucht|co2|luft|pm/.test(e))return COL.sky;
+  if(/rssi|signal|wifi|ble|dbm/.test(e))return COL.mauve;
+  return COL.lavender;
+}
+/* per-entity drill-down with switchable range */
+function openEntityModal(house,it){
+  const ov=el("div","modal-overlay");ov.style.setProperty("--accent","var(--lavender)");
+  const cur=(typeof it.num==="number")?nf(it.num,Number.isInteger(it.num)?0:2):(it.state||"–");
+  ov.innerHTML=`<div class="modal"><div class="modal-head"><div class="mi">${SVGICON("chip")}</div>
+    <div><h2>${it.name||it.entity_id}</h2><div class="msub">${it.entity_id}</div></div>
+    <button class="modal-close">✕</button></div>
+    <div class="modal-body">
+      <div class="ent-cur"><span class="ent-v">${cur}</span><span class="ent-u">${it.unit||""}</span>
+        <span class="ent-dc">${it.device_class||it.domain||""}</span></div>
+      <div class="ent-range">${[["6","6 h"],["24","24 h"],["72","3 d"],["168","7 d"]].map(([h,l])=>`<span data-h="${h}"${h==="24"?' class="on"':''}>${l}</span>`).join("")}</div>
+      <div class="modal-hero-chart"><canvas></canvas><div class="chart-tip"></div></div>
+    </div></div>`;
+  document.body.appendChild(ov);
+  const canvas=$("canvas",ov),tip=$(".chart-tip",ov); let hours=24;
+  const col=sparkColorFor({dataset:{eid:it.entity_id}});
+  function draw(){ ov.style.setProperty("--accent",col);
+    fetchEntityHistory(house,[it.entity_id],hours).then(s=>drawBigChart(canvas,s[it.entity_id]||[],col,tip)); }
+  ov.querySelectorAll(".ent-range span").forEach(b=>b.onclick=()=>{
+    hours=+b.dataset.h; ov.querySelectorAll(".ent-range span").forEach(x=>x.classList.toggle("on",x===b)); draw();});
+  draw(); wireClose(ov);
+}
+
+/* ── SNMP per-port panel ── */
+function updateSnmp(snmp){
+  const host=$("#snmp-ports"); if(!host)return;
+  if(!snmp||!snmp.ports||!snmp.ports.length){$("#snmp-sub").textContent="⏳ warte auf SNMP…";return;}
+  $("#snmp-sub").textContent=`${snmp.model||"UDM"} · ${snmp.ports.length} Ports · ${snmp.host||""}`;
+  const maxR=Math.max(...snmp.ports.map(p=>(p.in_mbits||0)+(p.out_mbits||0)),1);
+  reconcile(host,snmp.ports,p=>p.name,()=>el("div","bar"),(n,p)=>{
+    n.style.setProperty("--bc",p.oper==="up"?"var(--sapphire)":"var(--overlay0)");
+    const tot=(p.in_mbits||0)+(p.out_mbits||0);
+    const lbl=`<span class="online-dot ${p.oper==="up"?'on':'off'}"></span>${p.name}`+
+      (p.speed_mbit?`<span class="vlan" style="background:rgba(116,199,236,.12);color:var(--sapphire)">${p.speed_mbit>=1000?(p.speed_mbit/1000)+'G':p.speed_mbit+'M'}</span>`:"");
+    setBar(n,lbl,`↓${nf(p.in_mbits,1)} ↑${nf(p.out_mbits,1)}`,(tot/maxR*100),`${nf(tot,1)} Mbit/s gesamt`);
+  });
+}
+
+/* ── v2/v3/v4 init ── */
 initParticles();
 initTilt();
 setInterval(()=>{ if(activeHouse) fetchHistory(activeHouse); }, 15000);

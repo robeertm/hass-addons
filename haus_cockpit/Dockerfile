@@ -3,7 +3,7 @@ FROM $BUILD_FROM
 
 ENV LANG=C.UTF-8 PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 
-RUN apk add --no-cache jq
+RUN apk add --no-cache jq net-snmp-tools
 
 WORKDIR /app
 COPY requirements.txt .

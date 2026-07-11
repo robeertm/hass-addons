@@ -20,6 +20,8 @@ from services import registry
 from services.history import HistoryStore
 from services.ha_source import HASource
 from services.security import SecuritySource
+from services.snmp_poll import SnmpPoller
+from services.entity_history import EntityHistory
 
 app = Flask(__name__)
 
@@ -33,6 +35,7 @@ ingest.start()
 # ── HA sources (read-only) + Security sources, one per house ────────────────
 ha_sources = {}
 sec_sources = {}
+snmp_sources = {}
 for h in config.HOUSES:
     src = HASource(h["key"], h.get("ha_url"), h.get("ha_token"), poll_sec=config.HA_POLL_SEC)
     src.start()
@@ -42,10 +45,24 @@ for h in config.HOUSES:
                          nextdns_profile=h.get("nextdns_profile"))
     sec.start()
     sec_sources[h["key"]] = sec
+    snmp = SnmpPoller(h["key"], h.get("snmp_host"), config.SNMP_USER,
+                      config.SNMP_AUTH_PASS, config.SNMP_PRIV_PASS, poll_sec=config.SNMP_POLL_SEC)
+    snmp.start()
+    snmp_sources[h["key"]] = snmp
+
+
+# on-demand per-entity history (every sensor gets a sparkline)
+def _ha_resolver(house):
+    h = next((x for x in config.HOUSES if x["key"] == house), None)
+    return (h["ha_url"], h["ha_token"]) if h else (None, None)
+
+
+entity_history = EntityHistory(_ha_resolver)
 
 
 def _build(include_docker=True):
-    return registry.build_state(ingest, ha_sources, sec_sources, include_docker=include_docker)
+    return registry.build_state(ingest, ha_sources, sec_sources, snmp_sources,
+                                include_docker=include_docker)
 
 
 # ── history sampler ─────────────────────────────────────────────────────────
@@ -76,6 +93,18 @@ def api_security():
     house = request.args.get("house", config.HOUSES[0]["key"])
     return jsonify({"house": house, "generated_at": __import__("time").time(),
                     "security": registry.security_detail(sec_sources, ha_sources, house)})
+
+
+@app.route("/api/entity_history")
+def api_entity_history():
+    house = request.args.get("house", config.HOUSES[0]["key"])
+    ents = [e for e in request.args.get("entities", "").split(",") if e]
+    try:
+        hours = max(1, min(336, int(request.args.get("hours", "6"))))
+    except ValueError:
+        hours = 6
+    return jsonify({"house": house, "hours": hours,
+                    "series": entity_history.fetch(house, ents, hours)})
 
 
 @app.route("/api/history")

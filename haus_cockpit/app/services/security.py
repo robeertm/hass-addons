@@ -129,7 +129,8 @@ class SecuritySource:
         if not self.has_nextdns:
             return
         base = f"https://api.nextdns.io/profiles/{self.nextdns_profile}"
-        hdr = {"X-Api-Key": self.nextdns_key}
+        # NextDNS rejects the default Python-urllib User-Agent with 403 → set one
+        hdr = {"X-Api-Key": self.nextdns_key, "User-Agent": "haus-cockpit/1.0"}
         try:
             def _g(path):
                 req = urllib.request.Request(base + path, headers=hdr)

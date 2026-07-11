@@ -15,6 +15,10 @@ export MQTT_PASS="$(get mqtt_pass '')"
 export FLOWCOL_URL="$(get flowcol_url http://127.0.0.1:3002)"
 export MIKE_FLOWCOL_URL="$FLOWCOL_URL"
 export REFRESH_SEC="$(get refresh_seconds 4)"
+export SNMP_USER="$(get snmp_user '')"
+export SNMP_AUTH_PASS="$(get snmp_auth_pass '')"
+export SNMP_PRIV_PASS="$(get snmp_priv_pass '')"
+export MIKE_SNMP_HOST="$(get snmp_host 10.10.2.1)"
 export PORT=8099
 export MQTT_CLIENT_ID="haus-cockpit-mike-addon"
 

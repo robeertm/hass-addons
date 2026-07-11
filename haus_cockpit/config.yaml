@@ -1,5 +1,5 @@
 name: HAUS Cockpit (Klipphausen)
-version: "1.0.0"
+version: "1.1.0"
 slug: haus_cockpit
 description: Read-only Ops-Cockpit für Klipphausen — Huawei-Solar, Internet & Sicherheit, ALLE Sensoren (Explorer), Klima, Pi/UDM/BLE. Nur Mikes Haus, schaltet nichts.
 url: https://github.com/robeertm/hass-addons/tree/main/haus_cockpit
@@ -33,6 +33,10 @@ options:
   mqtt_pass: ""
   flowcol_url: "http://127.0.0.1:3002"
   refresh_seconds: 4
+  snmp_user: "robeertm"
+  snmp_auth_pass: ""
+  snmp_priv_pass: ""
+  snmp_host: "10.10.2.1"
 schema:
   ha_base_url: str
   ha_token: str?
@@ -42,3 +46,7 @@ schema:
   mqtt_pass: str?
   flowcol_url: str?
   refresh_seconds: int(2,60)
+  snmp_user: str?
+  snmp_auth_pass: password?
+  snmp_priv_pass: password?
+  snmp_host: str?

@@ -282,7 +282,7 @@ def _raw(ingest, h):
     return r
 
 
-def build_state(ingest, ha_sources=None, sec_sources=None, include_docker=True):
+def build_state(ingest, ha_sources=None, sec_sources=None, snmp_sources=None, include_docker=True):
     now = time.time()
     all_services = [service_status(s, ingest, now) for s in config.SERVICES]
     containers = docker_probe.containers(config.DOCKER_SOCK) if include_docker else []
@@ -328,6 +328,10 @@ def build_state(ingest, ha_sources=None, sec_sources=None, include_docker=True):
         sec = (sec_sources or {}).get(h["key"])
         if sec and "security" in h["panels"]:
             hs["security"] = _security_summary(sec.snapshot(snap))
+        # SNMP per-port
+        sp = (snmp_sources or {}).get(h["key"])
+        if sp and "snmp" in h["panels"]:
+            hs["snmp"] = sp.snapshot()
         hs["raw"] = _raw(ingest, h)
         houses.append(hs)
 

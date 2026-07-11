@@ -546,3 +546,67 @@ body::after{ /* faint grid */
   .solar-rings{width:100%; justify-content:center}
   .solar-day{grid-template-columns:repeat(2,1fr)}
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   v4 — dense gap-free tiling · per-sensor sparklines · NextDNS · overflow fixes
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── charts pack edge-to-edge, uniform height, canvas fills full width+height ── */
+.charts-grid{grid-template-columns:repeat(auto-fill,minmax(188px,1fr)); gap:10px; grid-auto-rows:1fr}
+.chart-tile{display:flex; flex-direction:column; min-height:0; height:142px; padding:11px 12px 9px}
+.chart-tile canvas{flex:1 1 auto; width:100%; height:auto; min-height:44px; margin-top:4px}
+.chart-tile .cth{flex:0 0 auto}
+.chart-tile .ctname{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:60%}
+.chart-tile .ctval{font-size:clamp(.8rem,2.6vw,1.05rem)}
+
+/* ── big numbers: clamp so they never overflow their card ── */
+.energy-hero .bignum{font-size:clamp(1.5rem,5.5vw,2.4rem); overflow:hidden; text-overflow:ellipsis; max-width:100%}
+.energy-hero{min-width:0; flex-wrap:wrap}
+.sf-v{font-size:clamp(.95rem,3.4vw,1.3rem); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%}
+.cl-temp{font-size:clamp(1.15rem,4.8vw,1.7rem)}
+.sens-hero .bignum{font-size:clamp(1.4rem,5vw,2rem)}
+.sf-node{min-width:0}
+.mm .mv{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.ent-v{overflow:hidden; text-overflow:ellipsis}
+
+/* ── per-sensor sparkline row (every entity in the explorer) ── */
+.sg-items{grid-template-columns:repeat(auto-fill,minmax(232px,1fr)); gap:6px; grid-auto-rows:1fr}
+.si{display:grid; grid-template-columns:minmax(0,1fr) 56px auto; align-items:center; gap:9px;
+    cursor:pointer; min-height:38px}
+.si-n{min-width:0}
+.si-spark{width:56px; height:24px; display:block; opacity:.95}
+.si-spark-x{width:56px; height:24px; display:block; border-bottom:1px dashed rgba(180,190,254,.14); align-self:center}
+.si.no-hist .si-spark{opacity:.25}
+.si-v{max-width:none; text-align:right}
+.si:hover{transform:translateY(-1px)}
+
+/* ── NextDNS section (prominent) ── */
+.sec-nextdns{margin-top:14px}
+.sec-nextdns:empty{display:none}
+.ndx-head{display:flex; align-items:center; gap:9px; margin-bottom:7px; flex-wrap:wrap}
+.ndx-ic{font-size:1rem}
+.ndx-head b{font-size:.82rem; letter-spacing:.04em}
+.ndx-stat{font-family:var(--mono); font-size:.72rem; color:var(--subtext0); margin-left:auto}
+.ndx-b{color:var(--red)}
+.ndx-bar{height:9px; border-radius:20px; background:rgba(243,139,168,.12); overflow:hidden}
+.ndx-fill{height:100%; border-radius:20px; transition:width 1s cubic-bezier(.2,.8,.2,1);
+  background:linear-gradient(90deg,var(--red),var(--peach))}
+.ndx-chips{display:flex; flex-wrap:wrap; gap:6px; margin-top:9px}
+
+/* ── entity drill-down modal ── */
+.ent-cur{display:flex; align-items:baseline; gap:8px; margin:2px 0 10px; flex-wrap:wrap}
+.ent-v{font-family:var(--mono); font-weight:700; font-size:clamp(1.6rem,6vw,2.4rem); line-height:1; color:var(--lavender)}
+.ent-u{font-family:var(--mono); color:var(--overlay1); font-size:.9rem}
+.ent-dc{margin-left:auto; font-family:var(--mono); font-size:.62rem; color:var(--overlay1);
+  background:rgba(180,190,254,.08); padding:3px 9px; border-radius:8px}
+.ent-range{display:flex; gap:7px; margin-bottom:10px}
+.ent-range span{cursor:pointer; font-family:var(--mono); font-size:.66rem; padding:5px 11px; border-radius:9px;
+  background:var(--card-bg); border:1px solid var(--card-brd); color:var(--subtext0); transition:.18s}
+.ent-range span:hover{border-color:var(--card-brd-hi); color:var(--text)}
+.ent-range span.on{border-color:var(--card-brd-hi); color:var(--text);
+  background:linear-gradient(180deg,rgba(180,190,254,.14),rgba(49,50,68,.4))}
+
+@media(max-width:720px){
+  .sg-items{grid-template-columns:1fr}
+  .charts-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+}
