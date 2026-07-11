@@ -862,7 +862,7 @@ function updateSecurity(sec){
     const det=secDetail[activeHouse]; const nd=det&&det.nextdns;
     if(sec.nextdns_enabled && (nd || sec.nd_block_pct!=null)){
       const pct=(nd&&nd.block_pct!=null)?nd.block_pct:sec.nd_block_pct;
-      const q=(nd&&nd.queries)||sec.nd_queries, b=(nd&&nd.blocked)||sec.nd_blocked;
+      const q=(nd&&nd.queries!=null)?nd.queries:sec.nd_queries, b=(nd&&nd.blocked!=null)?nd.blocked:sec.nd_blocked;
       const blk=(nd&&nd.top_blocked)||[];
       ndhost.innerHTML=`<div class="ndx-head"><span class="ndx-ic">🛡</span><b>NextDNS</b>
         <span class="ndx-stat">${nf(q,0)} Anfragen · <span class="ndx-b">${nf(b,0)} blockiert</span> · <b>${pct!=null?nf(pct,1):'–'}%</b></span></div>
@@ -1026,7 +1026,9 @@ function openSensorsModal(focusGroup){
     $("#sens-sub",ov).textContent=`${nf(total,0)} Entities · ${groups.length} Gruppen · ${focusGroup?"Klima zuerst":"nach Raum"}`;
     const term=(q.value||"").trim().toLowerCase();
     let shown=0;
-    const host=$("#sens-groups",ov); host.innerHTML="";
+    const host=$("#sens-groups",ov);
+    if(ov._sensObs) ov._sensObs.disconnect();   // release old row observations before rebuild
+    host.innerHTML="";
     let gs=groups.slice();
     if(focusGroup==="climate")gs.sort((a,b)=>(b.name.includes("Klima")|| /grad|°/.test(b.name))-(a.name.includes("Klima")));
     gs.forEach(g=>{
@@ -1067,9 +1069,11 @@ function openSensorsModal(focusGroup){
   }
   let deb; q.oninput=()=>{clearTimeout(deb);deb=setTimeout(()=>{if(sensCache[house])render(sensCache[house]);},150);};
   load();
-  // refresh values every 20s while open
-  const iv=setInterval(()=>{if(!ov.isConnected){clearInterval(iv);return;}
-    fetch("/api/sensors?house="+house,{cache:"no-store"}).then(r=>r.json()).then(d=>{sensCache[house]=d;render(d);}).catch(()=>{});},20000);
+  // refresh values every 30s while open — preserve scroll position across rebuild
+  const iv=setInterval(()=>{if(!ov.isConnected){clearInterval(iv);if(ov._sensObs)ov._sensObs.disconnect();return;}
+    fetch("/api/sensors?house="+house,{cache:"no-store"}).then(r=>r.json()).then(d=>{
+      sensCache[house]=d; var mo=$(".modal",ov), st=mo?mo.scrollTop:0; render(d); if(mo)mo.scrollTop=st;
+    }).catch(()=>{});},30000);
 }
 
 /* ── Climate panel ───────────────────────────────────────────────────────── */

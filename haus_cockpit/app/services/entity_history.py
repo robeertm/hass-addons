@@ -18,6 +18,7 @@ sparkline to "no data" rather than crashing the request.
 import json
 import threading
 import time
+import urllib.parse
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone, timedelta
@@ -83,7 +84,7 @@ class EntityHistory:
         to_fetch = []
         with self._lock:
             for e in wanted:
-                entry = self._cache.get((house, e))
+                entry = self._cache.get((house, e, hours))   # key by range too
                 if entry and (now - entry[0]) < self.ttl_sec:
                     result[e] = entry[1]
                 else:
@@ -110,7 +111,7 @@ class EntityHistory:
         with self._lock:
             for e in to_fetch:
                 pts = fetched.get(e, [])          # cache empties too (avoids refetch storms)
-                self._cache[(house, e)] = (stamp, pts)
+                self._cache[(house, e, hours)] = (stamp, pts)
                 result[e] = pts
         return result
 
@@ -126,10 +127,15 @@ class EntityHistory:
     def _fetch_from_ha(self, url, token, entity_ids, hours):
         """One batched GET /api/history/period for all entity_ids.
         Returns {entity_id: downsampled points} or None on hard error."""
-        start = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
-        csv = ",".join(entity_ids)
+        now = datetime.now(timezone.utc)
+        start = (now - timedelta(hours=hours)).isoformat()
+        csv = urllib.parse.quote(",".join(entity_ids), safe=",")
+        # end_time is REQUIRED for windows > 24h: HA's /history/period defaults to
+        # a single day from <start>, so without it a 7-day request returns only the
+        # first 24h (an old slice) instead of start→now.
+        end = urllib.parse.quote(now.isoformat(), safe="")
         api = (f"{url}/api/history/period/{start}"
-               f"?filter_entity_id={csv}&minimal_response&no_attributes")
+               f"?filter_entity_id={csv}&end_time={end}&minimal_response&no_attributes")
         req = urllib.request.Request(api, headers={"Authorization": f"Bearer {token}"})
         try:
             with self._lock:

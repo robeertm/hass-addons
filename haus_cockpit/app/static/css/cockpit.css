@@ -555,16 +555,17 @@ body::after{ /* faint grid */
 .charts-grid{grid-template-columns:repeat(auto-fill,minmax(188px,1fr)); gap:10px; grid-auto-rows:1fr}
 .chart-tile{display:flex; flex-direction:column; min-height:0; height:142px; padding:11px 12px 9px}
 .chart-tile canvas{flex:1 1 auto; width:100%; height:auto; min-height:44px; margin-top:4px}
+.chart-tile .spark-empty{flex:1 1 auto; height:auto; min-height:44px; display:grid; place-items:center}
 .chart-tile .cth{flex:0 0 auto}
 .chart-tile .ctname{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:60%}
 .chart-tile .ctval{font-size:clamp(.8rem,2.6vw,1.05rem)}
 
 /* ── big numbers: clamp so they never overflow their card ── */
-.energy-hero .bignum{font-size:clamp(1.5rem,5.5vw,2.4rem); overflow:hidden; text-overflow:ellipsis; max-width:100%}
+.energy-hero .bignum{font-size:clamp(1.5rem,5.5vw,2.4rem); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%}
 .energy-hero{min-width:0; flex-wrap:wrap}
 .sf-v{font-size:clamp(.95rem,3.4vw,1.3rem); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%}
-.cl-temp{font-size:clamp(1.15rem,4.8vw,1.7rem)}
-.sens-hero .bignum{font-size:clamp(1.4rem,5vw,2rem)}
+.cl-temp{font-size:clamp(1.15rem,4.8vw,1.7rem); overflow:hidden; max-width:100%}
+.sens-hero .bignum{font-size:clamp(1.4rem,5vw,2rem); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%}
 .sf-node{min-width:0}
 .mm .mv{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .ent-v{overflow:hidden; text-overflow:ellipsis}
@@ -577,7 +578,7 @@ body::after{ /* faint grid */
 .si-spark{width:56px; height:24px; display:block; opacity:.95}
 .si-spark-x{width:56px; height:24px; display:block; border-bottom:1px dashed rgba(180,190,254,.14); align-self:center}
 .si.no-hist .si-spark{opacity:.25}
-.si-v{max-width:none; text-align:right}
+.si-v{max-width:60%; text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .si:hover{transform:translateY(-1px)}
 
 /* ── NextDNS section (prominent) ── */
