@@ -3,8 +3,9 @@ FROM $BUILD_FROM
 
 ENV LANG=C.UTF-8 PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 
-# jq for run.sh option parsing; libmaxminddb (+ build deps) for geoip2/maxminddb
-RUN apk add --no-cache jq libmaxminddb gcc musl-dev libmaxminddb-dev
+# jq for run.sh option parsing. maxminddb ships a self-contained musllinux
+# wheel → no compiler / libmaxminddb-dev needed.
+RUN apk add --no-cache jq
 
 WORKDIR /app
 COPY requirements.txt .
