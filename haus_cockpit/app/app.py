@@ -24,6 +24,7 @@ from services.snmp_poll import SnmpPoller
 from services.entity_history import EntityHistory
 
 app = Flask(__name__)
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0   # statics immer revalidieren (ETag/304) — sonst hält Safari 12h altes JS
 
 # ── MQTT resilience feeds ───────────────────────────────────────────────────
 ingest = MqttIngest(
