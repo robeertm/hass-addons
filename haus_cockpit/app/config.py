@@ -120,8 +120,8 @@ _KLIPP_SERVICES += [
 _RADEBERG = {
     "key": "radeberg", "name": "Radeberg", "who": "Robert & Steffi",
     "accent": "mauve", "live": True,
-    "panels": ["services", "security", "energy", "climate",
-               "sensors", "pi", "udm", "snmp", "network", "docker"],
+    "panels": ["services", "security", "snmp", "energy", "climate",
+               "pi", "sensors", "udm", "network", "docker"],
     "pi_topic": "rpi_health/robert_pi/state",
     "udm_topic": "udm_health/radeberg/state",
     "shelly_prefix": "shelly_analyzer", "flow_prefix": "flowcol",
@@ -133,8 +133,8 @@ _RADEBERG = {
 _KLIPPHAUSEN = {
     "key": "klipphausen", "name": "Klipphausen", "who": "Mike",
     "accent": "teal", "live": True,
-    "panels": ["services", "solar", "security", "climate",
-               "sensors", "pi", "udm", "snmp", "ble"],
+    "panels": ["services", "solar", "security", "snmp",
+               "climate", "udm", "pi", "ble", "sensors"],
     "pi_topic": _kp("rpi_health/mike_pi/state"),
     "udm_topic": _kp("udm_health/sonnenrain/state"),
     "ble_prefix": _kp("mike_ble_source").rstrip("/") if KLIPP_PREFIX else "mike_ble_source",

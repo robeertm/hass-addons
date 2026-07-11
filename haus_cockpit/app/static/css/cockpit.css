@@ -611,3 +611,83 @@ body::after{ /* faint grid */
   .sg-items{grid-template-columns:1fr}
   .charts-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   v5 — dichte Hauptseite: zeilen-perfektes Grid, SNMP-Sparklines,
+        Aktivitäts-Ticker, lückenlose Tile-Reihen (Flex-Stretch)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* row-perfect spans: every row sums to exactly 12 columns (set by JS SPANS map) */
+.card.s4{grid-column:span 4}
+.card.s6{grid-column:span 6}
+.card.s8{grid-column:span 8}
+.card.s12{grid-column:span 12}
+
+/* equal-height rows: kill the ragged vertical gaps */
+.grid{align-items:stretch; gap:14px}
+.card{display:flex; flex-direction:column}
+.card>.cbody{flex:1; min-height:0; display:flex; flex-direction:column}
+.card>.cbody>*{flex:0 0 auto}
+.card>.cbody>.clima-grid{flex:1; align-content:stretch}
+.card>.cbody>.dock-grid{flex:1; align-content:flex-start}
+.card>.cbody>#en-bars{flex:1; justify-content:space-evenly}
+.card>.cbody>#net-bars{flex:1; justify-content:space-evenly}
+.card>.cbody>.snmp-list{flex:1; justify-content:space-evenly}
+.card>.cbody>.svc-grid{flex:1; align-content:stretch}
+
+/* charts: flex-wrap → last row always stretches edge-to-edge, zero holes */
+.charts-grid{display:flex; flex-wrap:wrap; gap:10px}
+.chart-tile{flex:1 1 205px; min-width:170px; max-width:100%}
+
+/* main-page item grids: same gap-free treatment */
+.svc-grid{display:flex; flex-wrap:wrap; gap:12px}
+.svc{flex:1 1 240px; min-width:208px}
+.clima-grid{display:flex; flex-wrap:wrap; gap:10px}
+.clima{flex:1 1 118px; min-width:102px}
+.dock-grid{display:flex; flex-wrap:wrap; gap:10px}
+.dock{flex:1 1 175px; min-width:150px}
+.sec-live{display:flex; flex-wrap:wrap; gap:9px}
+.sec-live .mini{flex:1 1 96px; min-width:86px}
+.sec-country-grid{display:flex; flex-wrap:wrap; gap:9px}
+.sec-cc{flex:1 1 128px; min-width:112px}
+.solar-day{display:flex; flex-wrap:wrap; gap:9px}
+.solar-day .mini{flex:1 1 120px; min-width:104px}
+
+/* ── SNMP per-port rows with sparkline ── */
+.snmp-list{display:flex; flex-direction:column; gap:5px}
+.sp-row{display:grid; grid-template-columns:minmax(84px,auto) 1fr auto; gap:10px; align-items:center;
+  padding:4px 0 5px; border-bottom:1px solid rgba(180,190,254,.05)}
+.sp-row:last-child{border-bottom:none}
+.sp-row.down{opacity:.4}
+.sp-l{display:flex; align-items:center; gap:7px; min-width:0}
+.sp-name{font-weight:600; font-size:.76rem; font-family:var(--mono)}
+.sp-speed{background:rgba(116,199,236,.12); color:var(--sapphire)}
+.sp-spark{width:100%; height:26px; display:block; min-width:56px}
+.sp-v{font-family:var(--mono); font-size:.7rem; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums}
+.sp-v .sp-tot{display:block; font-size:.56rem; color:var(--overlay1)}
+
+/* ── activity ticker (Zuletzt geändert) ── */
+.sens-rec-h{font-size:.64rem; letter-spacing:.1em; text-transform:uppercase; color:var(--subtext1); margin:4px 0 7px}
+.sens-recent{display:grid; grid-template-columns:1fr; gap:5px; align-content:start; margin-bottom:12px; flex:1 1 auto; min-height:0}
+.card.s12 .sens-recent,.card.s8 .sens-recent{grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+.sr{display:flex; align-items:center; gap:8px; padding:6px 9px; border-radius:9px;
+  background:rgba(24,24,37,.42); border:1px solid var(--card-brd); font-size:.74rem; min-width:0; transition:.15s}
+.sr:hover{border-color:var(--card-brd-hi); background:rgba(24,24,37,.7)}
+.sr-dot{width:7px; height:7px; border-radius:50%; background:var(--lavender); box-shadow:0 0 7px var(--lavender); flex:none}
+.sr-dot.binary_sensor{background:var(--teal); box-shadow:0 0 7px var(--teal)}
+.sr-dot.light{background:var(--yellow); box-shadow:0 0 7px var(--yellow)}
+.sr-dot.switch{background:var(--peach); box-shadow:0 0 7px var(--peach)}
+.sr-dot.device_tracker{background:var(--sky); box-shadow:0 0 7px var(--sky)}
+.sr-n{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--subtext0); min-width:0}
+.sr-v{font-family:var(--mono); font-weight:700; font-size:.75rem; flex:none; max-width:38%;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-variant-numeric:tabular-nums}
+.sr-t{font-family:var(--mono); font-size:.58rem; color:var(--overlay1); flex:none; min-width:50px; text-align:right}
+
+/* ── VLAN chips on the security card ── */
+.sec-vlans{display:flex; flex-wrap:wrap; gap:6px; margin-top:12px}
+.sec-vlans:empty{display:none}
+
+/* responsive: below 1100px stack single-column (still gap-free) */
+@media(max-width:1100px){
+  .card.s4,.card.s6,.card.s8,.card.s12{grid-column:span 12}
+}

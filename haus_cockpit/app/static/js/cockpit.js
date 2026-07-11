@@ -182,24 +182,32 @@ function buildPanel(name,h){
       <div class="sec-cols"><div><div class="sec-h">🌍 Top-Länder</div><div class="barlist" id="sec-countries"></div></div>
       <div><div class="sec-h">🔌 Top-Dienste</div><div class="barlist" id="sec-services"></div></div></div>
       <div class="sec-nextdns" id="sec-nextdns"></div>
+      <div class="sec-vlans" id="sec-vlans"></div>
       <div class="sec-note" id="sec-note"></div>`;return c;}
   if(name==="snmp"){const c=card("half","network",h.key==="klipphausen"?"UDM Ports · Sonnenrain":"UDM Ports · Radeberg","var(--sapphire)","SNMP");
     $(".cbody",c).innerHTML=`<div class="tag" id="snmp-sub" style="margin-bottom:10px;font-family:var(--mono);font-size:.7rem;color:var(--overlay1)"></div>
-      <div class="barlist" id="snmp-ports"></div>`;return c;}
+      <div class="snmp-list" id="snmp-ports"></div>`;return c;}
   if(name==="climate"){const c=card("half","thermo","Klima · Räume","var(--sky)");
     $(".cbody",c).innerHTML=`<div class="clima-grid" id="clima-grid"></div>`;return c;}
   if(name==="sensors"){const c=card("","grid","Alle Sensoren","var(--lavender)");
     $(".cbody",c).innerHTML=`<div class="sens-hero"><span class="bignum" id="sens-total" data-val="0">–</span><span class="unit">Entities</span>
       <span class="sens-num" id="sens-num"></span></div>
       <div class="sens-mini" id="sens-mini"></div>
+      <div class="sens-rec-h">⚡ Zuletzt geändert</div>
+      <div class="sens-recent" id="sens-recent"></div>
       <button class="sens-open" id="sens-open">${SVGICON("search")}<span>Alle durchsuchen</span></button>`;return c;}
   return null;
 }
 
+/* row-perfect spans per house — every row sums to 12 columns (no holes) */
+const SPANS={radeberg:{services:12,security:8,snmp:4,energy:6,climate:6,pi:8,sensors:4,udm:6,network:6,docker:12},
+             klipphausen:{services:12,solar:12,security:8,snmp:4,climate:6,udm:6,pi:8,ble:4,sensors:12}};
 function renderHouse(host,h){
   if(!host._built){
     const g=el("div","grid");
-    (h.panels||[]).forEach(p=>{const c=buildPanel(p,h);if(c){c.dataset.group=p;g.appendChild(c);}});
+    (h.panels||[]).forEach(p=>{const c=buildPanel(p,h);if(c){c.dataset.group=p;
+      const sp=(SPANS[h.key]||{})[p]; if(sp)c.classList.add("s"+sp);
+      g.appendChild(c);}});
     host.appendChild(g);
     // whole-card drill-down for data panels
     g.querySelectorAll(".card").forEach(c=>{const grp=c.dataset.group;
@@ -211,7 +219,9 @@ function renderHouse(host,h){
       }else if(grp==="security"){
         c.classList.add("clickable"); c.addEventListener("click",()=>openSecurityModal());
       }else if(grp==="sensors"||grp==="climate"){
-        c.classList.add("clickable"); c.addEventListener("click",()=>openSensorsModal(grp==="climate"?"climate":null));
+        c.classList.add("clickable"); c.addEventListener("click",e=>{if(e.target.closest(".sr"))return;openSensorsModal(grp==="climate"?"climate":null);});
+      }else if(grp==="snmp"){
+        c.classList.add("clickable"); c.addEventListener("click",()=>openSnmpModal());
       }});
     // history / charts section
     const cs=el("section");
@@ -446,6 +456,9 @@ const CSPEC={
   "sec.host_count":{l:"Aktive Hosts",u:"",c:COL.sky,g:"Sicherheit"},
   "sec.v6_share":{l:"IPv6-Anteil",u:"%",c:COL.mauve,g:"Sicherheit",d:1},
   "sec.nd_block_pct":{l:"NextDNS blockiert",u:"%",c:COL.red,g:"Sicherheit",d:1},
+  "snmp.in_mbits":{l:"Ports ↓ Summe",u:"Mbit/s",c:COL.sapphire,g:"UDM",d:1},
+  "snmp.out_mbits":{l:"Ports ↑ Summe",u:"Mbit/s",c:COL.teal,g:"UDM",d:1},
+  "snmp.ports_up":{l:"Ports aktiv",u:"",c:COL.green,g:"UDM"},
 };
 function specFor(key){
   if(CSPEC[key])return CSPEC[key];
@@ -473,6 +486,12 @@ function extractMetrics(h){
     if(typeof sol.autarky_today_pct==="number")m["solar.autarky"]=sol.autarky_today_pct;}
   const sc=h.security;
   if(sc)["live_mbits","total_gb","host_count","nd_block_pct","v6_share"].forEach(k=>{if(typeof sc[k]==="number")m["sec."+k]=sc[k];});
+  const sn=h.snmp;
+  if(sn&&sn.ports&&sn.ports.length){
+    m["snmp.in_mbits"]=+sn.ports.reduce((a,p)=>a+(p.in_mbits||0),0).toFixed(2);
+    m["snmp.out_mbits"]=+sn.ports.reduce((a,p)=>a+(p.out_mbits||0),0).toFixed(2);
+    m["snmp.ports_up"]=sn.ports.filter(p=>p.oper==="up").length;
+  }
   return m;
 }
 
@@ -856,6 +875,13 @@ function updateSecurity(sec){
     $("#sec-countries").innerHTML=`<div class="sec-empty">flow-collector nicht aktiv — nur UniFi-WAN.<br>NetFlow auf UDM → dieser Host aktivieren.</div>`;
     $("#sec-services").innerHTML="";
   }
+  // VLAN chips on the main card (from the lazy detail)
+  const vl=$("#sec-vlans");
+  if(vl){
+    const det=secDetail[activeHouse];
+    const vs=(sec.flow_enabled&&det&&det.flow&&det.flow.vlans)?det.flow.vlans.slice(0,8):[];
+    vl.innerHTML=vs.map(v=>`<span class="chip"><span class="led" style="background:var(--lavender);box-shadow:0 0 7px var(--lavender)"></span>${v.name||v.id} · ${fmtMB(v.mb)}${v.hosts?` · ${v.hosts} Hosts`:""}</span>`).join("");
+  }
   // NextDNS section (prominent)
   const ndhost=$("#sec-nextdns");
   if(ndhost){
@@ -969,6 +995,20 @@ function updateSensors(sum,house){
   const bd=sum.by_domain||{};
   const top=Object.entries(bd).sort((a,b)=>b[1]-a[1]).slice(0,8);
   $("#sens-mini").innerHTML=top.map(([dom,n])=>`<span class="sdchip"><b>${n}</b> ${dom}</span>`).join("");
+  // live activity ticker — most recently changed entities, click = drill-down
+  const rec=$("#sens-recent");
+  if(rec){
+    reconcile(rec,sum.recent||[],r=>r.entity_id,
+      ()=>{const d=el("div","sr clickable");d.onclick=()=>{if(d._it)openEntityModal(house,d._it);};return d;},
+      (d,r)=>{d._it=r;
+        const isNum=(typeof r.num==="number");
+        const val=isNum?nf(r.num,Number.isInteger(r.num)?0:1):(r.state||"–");
+        d.innerHTML=`<span class="sr-dot ${r.domain}"></span>
+          <span class="sr-n" title="${r.entity_id}">${r.name}</span>
+          <span class="sr-v">${val}${r.unit?`<span class="si-u">${r.unit}</span>`:""}</span>
+          <span class="sr-t">${ageText(r.ago_sec)}</span>`;
+      });
+  }
 }
 let sensCache={};
 function openSensorsModal(focusGroup){
@@ -1139,19 +1179,46 @@ function openEntityModal(house,it){
   draw(); wireClose(ov);
 }
 
-/* ── SNMP per-port panel ── */
+/* ── SNMP per-port panel — every port gets a live sparkline ── */
+const snmpHist={};      // "house|port" -> [[epoch, in+out Mbit/s], ...] rolling client buffer
+const snmpLastPush={};  // house -> epoch of last stored sample
 function updateSnmp(snmp){
   const host=$("#snmp-ports"); if(!host)return;
   if(!snmp||!snmp.ports||!snmp.ports.length){$("#snmp-sub").textContent="⏳ warte auf SNMP…";return;}
-  $("#snmp-sub").textContent=`${snmp.model||"UDM"} · ${snmp.ports.length} Ports · ${snmp.host||""}`;
-  const maxR=Math.max(...snmp.ports.map(p=>(p.in_mbits||0)+(p.out_mbits||0)),1);
-  reconcile(host,snmp.ports,p=>p.name,()=>el("div","bar"),(n,p)=>{
-    n.style.setProperty("--bc",p.oper==="up"?"var(--sapphire)":"var(--overlay0)");
-    const tot=(p.in_mbits||0)+(p.out_mbits||0);
-    const lbl=`<span class="online-dot ${p.oper==="up"?'on':'off'}"></span>${p.name}`+
-      (p.speed_mbit?`<span class="vlan" style="background:rgba(116,199,236,.12);color:var(--sapphire)">${p.speed_mbit>=1000?(p.speed_mbit/1000)+'G':p.speed_mbit+'M'}</span>`:"");
-    setBar(n,lbl,`↓${nf(p.in_mbits,1)} ↑${nf(p.out_mbits,1)}`,(tot/maxR*100),`${nf(tot,1)} Mbit/s gesamt`);
+  const ti=snmp.ports.reduce((a,p)=>a+(p.in_mbits||0),0), to=snmp.ports.reduce((a,p)=>a+(p.out_mbits||0),0);
+  $("#snmp-sub").textContent=`${snmp.model||"UDM"} · ${snmp.ports.length} Ports · Σ ↓${nf(ti,1)} ↑${nf(to,1)} Mbit/s`;
+  // one history sample per backend poll (dedup by sample epoch)
+  const sampleEp=Math.round(Date.now()/1000-(snmp.age_sec||0)), hk=activeHouse;
+  if(snmpLastPush[hk]==null||sampleEp>snmpLastPush[hk]){
+    snmpLastPush[hk]=sampleEp;
+    snmp.ports.forEach(p=>{
+      const k=hk+"|"+p.name, buf=snmpHist[k]||(snmpHist[k]=[]);
+      buf.push([sampleEp,(p.in_mbits||0)+(p.out_mbits||0)]);
+      if(buf.length>240)buf.shift();
+    });
+  }
+  reconcile(host,snmp.ports,p=>p.name,()=>el("div","sp-row"),(n,p)=>{
+    const up=p.oper==="up", tot=(p.in_mbits||0)+(p.out_mbits||0);
+    if(!n._init){n.innerHTML=`<div class="sp-l"><span class="online-dot"></span><span class="sp-name"></span><span class="vlan sp-speed"></span></div>
+      <canvas class="sp-spark"></canvas><div class="sp-v"></div>`;n._init=true;}
+    n.classList.toggle("down",!up);
+    $(".online-dot",n).className="online-dot "+(up?"on":"off");
+    $(".sp-name",n).textContent=p.name;
+    const spd=$(".sp-speed",n);
+    if(p.speed_mbit){spd.style.display="";spd.textContent=p.speed_mbit>=1000?(p.speed_mbit/1000)+"G":p.speed_mbit+"M";}
+    else spd.style.display="none";
+    $(".sp-v",n).innerHTML=`<b style="color:var(--sapphire)">↓${nf(p.in_mbits,1)}</b> <b style="color:var(--teal)">↑${nf(p.out_mbits,1)}</b><span class="sp-tot">${nf(tot,1)} Mbit/s</span>`;
+    drawSpark($(".sp-spark",n),snmpHist[hk+"|"+p.name]||[],up?COL.sapphire:"#6c7086",1);
   });
+}
+/* SNMP drill-down: summed-rate charts + raw per-port grid */
+function openSnmpModal(){
+  const h=window._last.houses.find(x=>x.key===activeHouse); if(!h||!h.snmp)return;
+  const keys=chartKeysForHouse().filter(k=>k.startsWith("snmp."));
+  const raw={};
+  (h.snmp.ports||[]).forEach(p=>{raw[p.name]={status:p.oper,speed_mbit:p.speed_mbit,in_mbits:p.in_mbits,out_mbits:p.out_mbits};});
+  chartModal({icon:"network",title:"UDM Ports · SNMP",sub:`${h.name} · ${h.snmp.model||"UDM"} · ${h.snmp.host||""}`,
+    accent:"var(--sapphire)",keys,raw,rawTitle:"Alle Ports (live)"});
 }
 
 /* ── v2/v3/v4 init ── */

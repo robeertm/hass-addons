@@ -10,6 +10,8 @@ Three products:
 
 Everything is read-only shaping of already-fetched state.
 """
+import time as _time
+from datetime import datetime as _dt
 
 # ── Huawei solar entity map (Mike) ──────────────────────────────────────────
 _SOLAR_NOW = {
@@ -236,15 +238,45 @@ def explorer(snap):
     return {"groups": out, "total": sum(g["n"] for g in out), "n_groups": len(out)}
 
 
+_RECENT_DOMAINS = {"sensor", "binary_sensor", "light", "switch", "cover",
+                   "climate", "device_tracker", "lock", "media_player"}
+
+
+def _lc_epoch(iso):
+    if not iso:
+        return None
+    try:
+        return _dt.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
+    except Exception:
+        return None
+
+
 def summary(snap):
-    """Small counts block for the main /api/state (cheap)."""
+    """Counts block for /api/state + 'zuletzt geändert' activity ticker."""
     by_domain = {}
     n_num = 0
+    changed = []                       # (epoch, eid, e)
+    now = _time.time()
     for eid, e in snap.items():
         dom = eid.split(".", 1)[0]
         by_domain[dom] = by_domain.get(dom, 0) + 1
         if e.get("num") is not None:
             n_num += 1
+        if dom in _RECENT_DOMAINS and e.get("state") not in (None, "", "unknown", "unavailable"):
+            ep = _lc_epoch(e.get("last_changed"))
+            if ep and now - ep < 6 * 3600:
+                changed.append((ep, eid, e))
+    changed.sort(key=lambda x: -x[0])
+    recent = [{
+        "entity_id": eid,
+        "name": e.get("name") or eid,
+        "domain": eid.split(".", 1)[0],
+        "num": e.get("num"),
+        "state": e.get("state"),
+        "unit": e.get("unit"),
+        "device_class": e.get("device_class"),
+        "ago_sec": max(0, round(now - ep)),
+    } for ep, eid, e in changed[:12]]
     return {"total": len(snap), "numeric": n_num,
             "sensors": by_domain.get("sensor", 0),
-            "by_domain": by_domain}
+            "by_domain": by_domain, "recent": recent}

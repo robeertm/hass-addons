@@ -72,6 +72,12 @@ def extract_metrics(house):
             v = sec.get(k)
             if isinstance(v, (int, float)):
                 m[f"sec.{k}"] = v
+    snmp = house.get("snmp")
+    if snmp and snmp.get("ports"):
+        ports = snmp["ports"]
+        m["snmp.in_mbits"] = round(sum(p.get("in_mbits") or 0 for p in ports), 2)
+        m["snmp.out_mbits"] = round(sum(p.get("out_mbits") or 0 for p in ports), 2)
+        m["snmp.ports_up"] = sum(1 for p in ports if p.get("oper") == "up")
     return m
 
 
