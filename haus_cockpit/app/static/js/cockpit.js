@@ -136,7 +136,7 @@ function renderViews(d,force){
   window._last=d;
   const house=d.houses.find(h=>h.key===activeHouse)||d.houses[0];
   const host=$("#views");
-  if(force||builtHouse!==house.key){host.innerHTML="";host._built=null;builtHouse=house.key;ageEls.clear();}
+  if(force||builtHouse!==house.key){entReset();host.innerHTML="";host._built=null;builtHouse=house.key;ageEls.clear();}
   if(house.live)renderHouse(host,house); else renderPending(host,house);
   if(typeof fetchHistory==="function" && histHouse!==activeHouse) fetchHistory(activeHouse);
 }
@@ -227,13 +227,15 @@ function renderHouse(host,h){
     const cs=el("section");
     cs.innerHTML=`<div class="sec-title"><div class="st-ic">${SVGICON("chip")}</div>
       <h2>Verlauf · History</h2><div class="st-line"></div>
-      <span class="st-badge">ALLE Serien · gruppiert · Klick für Detail</span></div>
-      <div class="charts-list" id="charts-host"></div>`;
+      <span class="st-badge">ALLE Serien + ALLE Sensoren · gruppiert · Klick für Detail</span></div>
+      <div class="charts-list" id="charts-host"></div>
+      <div class="charts-list charts-ent" id="charts-ent"></div>`;
     host.appendChild(cs);
     host._built=true;
   }
   updateHouse(host,h);
   updateCharts(window._last);
+  updateEntityCharts();
 }
 
 function updateHouse(host,h){
@@ -500,11 +502,11 @@ function extractMetrics(h){
 }
 
 /* ── history data ── */
-let histData={}, histHouse=null;
+let histData={}, histHouse=null, histRev=0;
 async function fetchHistory(house){
   try{
     const r=await fetch("/api/history?house="+house,{cache:"no-store"});
-    const d=await r.json(); histData=d.series||{}; histHouse=house;
+    const d=await r.json(); histData=d.series||{}; histHouse=house; histRev++;
     if(builtHouse===house) updateCharts(window._last);
   }catch(e){}
 }
@@ -569,18 +571,21 @@ function renderTiles(grid,keys,live){
       t.innerHTML=`<div class="cth"><span class="ctname">${sp.l}</span><span class="ctval" data-val="0">–</span></div>
         <canvas></canvas><div class="cth" style="margin-top:3px"><span class="ctsub">6 h</span><span class="ctrend flat" style="margin-left:auto">–</span></div>`;
       t.onclick=()=>openGroupModal(specFor(k).g,k);
+      ensureEntObs(); if(entObs)entObs.observe(t);   // Scan-Dot off-screen pausieren
       return t;},
     (t,k)=>{const sp=specFor(k),ser=histData[k]||[];
       const cv=live[k]!=null?live[k]:(ser.length?ser[ser.length-1][1]:null);
       const vnode=$(".ctval",t);vnode.style.color=sp.c;
       if(cv!=null)countUp(vnode,cv,sp.d||0,sp.u?(" "+sp.u):"");else vnode.textContent="–";
-      drawSpark($("canvas",t),ser,sp.c, t._drawn?1:undefined);t._drawn=true;
-      // trend
-      const tr=$(".ctrend",t);
-      if(ser.length>2){const first=ser[0][1],last=ser[ser.length-1][1],dp=first!==0?((last-first)/Math.abs(first)*100):0;
-        const dir=Math.abs(dp)<3?"flat":dp>0?"up":"down";tr.className="ctrend "+dir;
-        tr.textContent=(dp>0?"▲":dp<0?"▼":"→")+" "+nf(Math.abs(dp),0)+"%";}
-      else{tr.className="ctrend flat";tr.textContent="sammle…";}
+      // Canvas+Trend nur neu zeichnen, wenn NEUE History da ist (15s), nicht bei jedem 4s-Poll
+      if(t._histRev!==histRev){t._histRev=histRev;
+        drawSpark($("canvas",t),ser,sp.c, t._drawn?1:undefined);t._drawn=true;
+        const tr=$(".ctrend",t);
+        if(ser.length>2){const first=ser[0][1],last=ser[ser.length-1][1],dp=first!==0?((last-first)/Math.abs(first)*100):0;
+          const dir=Math.abs(dp)<3?"flat":dp>0?"up":"down";tr.className="ctrend "+dir;
+          tr.textContent=(dp>0?"▲":dp<0?"▼":"→")+" "+nf(Math.abs(dp),0)+"%";}
+        else{tr.className="ctrend flat";tr.textContent="sammle…";}
+      }
     });
 }
 function updateCharts(d){
@@ -1157,7 +1162,7 @@ function openSensorsModal(focusGroup){
   function load(){
     if(sensCache[house]){render(sensCache[house]);return;}
     fetch("/api/sensors?house="+house,{cache:"no-store"}).then(r=>r.json()).then(d=>{
-      sensCache[house]=d; render(d);
+      setSens(house,d); render(d);
     }).catch(()=>{$("#sens-groups",ov).innerHTML=`<div class="sec-empty">Konnte Sensoren nicht laden.</div>`;});
   }
   let deb; q.oninput=()=>{clearTimeout(deb);deb=setTimeout(()=>{if(sensCache[house])render(sensCache[house]);},150);};
@@ -1165,7 +1170,7 @@ function openSensorsModal(focusGroup){
   // refresh values every 30s while open — preserve scroll position across rebuild
   const iv=setInterval(()=>{if(!ov.isConnected){clearInterval(iv);if(ov._sensObs)ov._sensObs.disconnect();return;}
     fetch("/api/sensors?house="+house,{cache:"no-store"}).then(r=>r.json()).then(d=>{
-      sensCache[house]=d; var mo=$(".modal",ov), st=mo?mo.scrollTop:0; render(d); if(mo)mo.scrollTop=st;
+      setSens(house,d); var mo=$(".modal",ov), st=mo?mo.scrollTop:0; render(d); if(mo)mo.scrollTop=st;
     }).catch(()=>{});},30000);
 }
 
@@ -1186,6 +1191,12 @@ function updateClimate(rooms){
    v4 — per-sensor history (every entity), entity drill-down, SNMP per-port
    ═══════════════════════════════════════════════════════════════════════════ */
 const entHistCache={};   // "house|eid|hours" -> {pts:[[t,v]], ts}
+function pruneEntHist(){  // Review-Fix: 24/7-Tab — abgelaufene Einträge nicht ewig horten
+  const keys=Object.keys(entHistCache);
+  if(keys.length<=900)return;
+  keys.sort((a,b)=>entHistCache[a].ts-entHistCache[b].ts)
+      .slice(0,keys.length-600).forEach(k=>{delete entHistCache[k];});
+}
 function fetchEntityHistory(house,eids,hours){
   hours=hours||6; const now=Date.now(), out={}, need=[];
   eids.forEach(e=>{const c=entHistCache[house+"|"+e+"|"+hours];
@@ -1196,6 +1207,7 @@ function fetchEntityHistory(house,eids,hours){
   return fetch(url,{cache:"no-store"}).then(r=>r.json()).then(d=>{
     const series=d.series||{};
     need.forEach(e=>{const pts=series[e]||[]; entHistCache[house+"|"+e+"|"+hours]={pts,ts:Date.now()}; out[e]=pts;});
+    pruneEntHist();
     return out;
   }).catch(()=>out);
 }
@@ -1267,6 +1279,132 @@ function openSnmpModal(focusKey){
   chartModal({icon:"network",title:"UDM Ports · SNMP",sub:`${h.name} · ${h.snmp.model||"UDM"} · ${h.snmp.host||""}`,
     accent:"var(--sapphire)",keys,focusKey,raw,rawTitle:"Alle Ports (live)"});
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   v10 — ALLE Sensor-Plots auf der Hauptseite, gruppiert wie im Explorer
+   (gleiches Lazy-Muster wie das Explorer-Modal: IntersectionObserver +
+    gebatchter /api/entity_history-Fetch ≤40, TTL-Cache in fetchEntityHistory)
+   ═══════════════════════════════════════════════════════════════════════════ */
+let entObs=null; const entPending=new Map(); let entFlushT=null;
+const entLoading={};            // house → Initial-Fetch läuft (überlebt DOM-Rebuilds, Review-Fix)
+const sensRev={};               // house → Daten-Revision: 700 Tiles nur bei NEUEN Daten anfassen
+const ENT_TTL=5*60*1000;        // sichtbare Sparklines spätestens alle 5 min auffrischen
+function setSens(house,d){ sensCache[house]=d; sensRev[house]=(sensRev[house]||0)+1; }
+function entReset(){            // auch beim Wechsel auf ein live:false-Haus (Review-Fix)
+  if(entObs)entObs.disconnect();
+  entPending.clear();
+  if(entFlushT){clearTimeout(entFlushT);entFlushT=null;}
+}
+function entFlush(){
+  entFlushT=null;
+  const batch=[...entPending.keys()].slice(0,40);
+  if(!batch.length)return;
+  const rows=batch.map(e=>{const t=entPending.get(e);entPending.delete(e);return [e,t];});
+  const house=activeHouse;
+  fetchEntityHistory(house,batch,6).then(series=>{
+    if(activeHouse!==house)return;                    // Haus gewechselt → Antwort verwerfen
+    rows.forEach(([eid,tile])=>{
+      if(!tile.isConnected)return;
+      if(!series||!(eid in series)){                  // Fetch-Fehler ≠ „keine History":
+        if(!tile._retryT)tile._retryT=setTimeout(()=>{tile._retryT=null;   // später erneut versuchen
+          if(tile.isConnected&&!tile._drawnAt){entPending.set(eid,tile);entSchedule();}},8000);
+        return;
+      }
+      const pts=series[eid]||[];
+      tile._drawnAt=Date.now(); tile._drawn=true; tile._released=false;
+      const cv=$("canvas",tile); if(cv)drawSpark(cv,pts,tile._col||COL.lavender,1);
+      const tr=$(".ctrend",tile);
+      if(tr){
+        if(pts.length>2){const f=pts[0][1],l=pts[pts.length-1][1],dp=f!==0?((l-f)/Math.abs(f)*100):0;
+          const dir=Math.abs(dp)<3?"flat":dp>0?"up":"down"; tr.className="ctrend "+dir;
+          tr.textContent=(dp>0?"▲":dp<0?"▼":"→")+" "+nf(Math.abs(dp),0)+"%";}
+        else {tr.className="ctrend flat"; tr.textContent=pts.length?"—":"keine Hist.";}
+      }
+    });
+  }).catch(()=>{});
+  if(entPending.size)entFlushT=setTimeout(entFlush,180);
+}
+function entSchedule(){ if(!entFlushT)entFlushT=setTimeout(entFlush,160); }
+function ensureEntObs(){
+  if(entObs||typeof IntersectionObserver!=="function")return;
+  entObs=new IntersectionObserver(es=>{
+    es.forEach(en=>{
+      const t=en.target, eid=t.dataset.eid;
+      t.classList.toggle("offscreen",!en.isIntersecting);   // Scan-Dots off-screen pausieren
+      if(!en.isIntersecting){
+        if(!eid)return;
+        entPending.delete(eid);                             // Fling-Scroll: Ungesehenes nicht fetchen
+        if(t._drawnAt&&!t._released){                       // Canvas-RAM freigeben (iOS-Budget)
+          const cv=$("canvas",t); if(cv){cv.width=0;cv.height=0;}
+          t._released=true;
+        }
+        return;
+      }
+      if(!eid)return;                                       // kuratierte Tiles: nur Offscreen-Pause
+      if(t._drawnAt&&!t._released&&Date.now()-t._drawnAt<ENT_TTL)return;
+      entPending.set(eid,t); entSchedule();
+    });
+  },{rootMargin:"220px 0px"});
+}
+function updateEntityCharts(){
+  const host=$("#charts-ent"); if(!host)return;
+  const house=activeHouse;
+  const data=sensCache[house];
+  if(!data){
+    if(!entLoading[house]){entLoading[house]=true;
+      fetch("/api/sensors?house="+house,{cache:"no-store"}).then(r=>r.json()).then(d=>{
+        setSens(house,d); entLoading[house]=false;
+        if(builtHouse===house)updateEntityCharts();
+      }).catch(()=>{entLoading[house]=false;});}
+    return;
+  }
+  const rev=sensRev[house]||0;
+  if(host._rev===rev)return;      // 4s-Poll ohne neue Daten: 700 Tiles NICHT anfassen (Review-Fix)
+  host._rev=rev;
+  ensureEntObs();
+  const groups=((data.explorer&&data.explorer.groups)||[])
+    .map(g=>({name:g.name,is_room:g.is_room,items:g.items.filter(it=>typeof it.num==="number")}))
+    .filter(g=>g.items.length);
+  reconcile(host,groups,g=>g.name,
+    ()=>{const s=el("div","chart-group");
+      s.innerHTML=`<div class="cg-head"><span class="cg-name"></span><span class="cg-n"></span><span class="cg-line"></span></div>
+        <div class="charts-grid"></div>`;
+      return s;},
+    (s,g)=>{$(".cg-name",s).textContent=(g.is_room?"🏠 ":"")+g.name;$(".cg-n",s).textContent=g.items.length;
+      reconcile($(".charts-grid",s),g.items,it=>it.entity_id,
+        (it)=>{const t=el("div","chart-tile clickable ent-tile");
+          t.dataset.eid=it.entity_id;
+          t._col=sparkColorFor({dataset:{eid:it.entity_id}});
+          t.innerHTML=`<div class="cth"><span class="ctname" title="${it.entity_id}"></span><span class="ctval"></span></div>
+            <canvas></canvas><div class="cth" style="margin-top:3px"><span class="ctsub">6 h</span><span class="ctrend flat" style="margin-left:auto">…</span></div>`;
+          t.onclick=()=>openEntityModal(activeHouse,t._it||it);
+          if(entObs)entObs.observe(t);
+          return t;},
+        (t,it)=>{t._it=it;
+          $(".ctname",t).textContent=it.name||it.entity_id;
+          const v=$(".ctval",t); v.style.color=t._col;
+          v.innerHTML=nf(it.num,Number.isInteger(it.num)?0:1)+(it.unit?` <span class="mun">${it.unit}</span>`:"");
+        });
+    });
+}
+/* 60s: Werte auffrischen + sichtbare, veraltete Sparklines re-queuen */
+setInterval(()=>{
+  if(!activeHouse||!window._last)return;
+  const house=activeHouse;                      // Haus VOR dem Fetch einfrieren (Review-Fix: kein Cache-Poisoning)
+  fetch("/api/sensors?house="+house,{cache:"no-store"}).then(r=>r.json()).then(d=>{
+    setSens(house,d);
+    if(builtHouse!==house)return;
+    updateEntityCharts();
+    // sichtbare Tiles, deren Sparkline älter als ENT_TTL ist → neu zeichnen (Review-Fix: kein Einfrieren)
+    try{
+      document.querySelectorAll(".ent-tile").forEach(t=>{
+        if(/\boffscreen\b/.test(t.className||""))return;
+        if(t._drawnAt&&Date.now()-t._drawnAt>=ENT_TTL&&t.dataset.eid)entPending.set(t.dataset.eid,t);
+      });
+      if(entPending.size)entSchedule();
+    }catch(e){}
+  }).catch(()=>{});
+},60000);
 
 /* ── v2/v3/v4 init ── */
 initParticles();

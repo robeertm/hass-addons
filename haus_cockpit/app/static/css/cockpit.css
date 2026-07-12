@@ -782,7 +782,14 @@ body::after{ /* faint grid */
 @keyframes scanPulse{0%,100%{transform:scale(.7);opacity:.6}50%{transform:scale(1.3);opacity:1}}
 .sp-row{position:relative}          /* Anker für den Punkt in SNMP-Reihen */
 .si{position:relative}              /* … und in Explorer-Reihen */
+.chart-tile.offscreen .scan-dot{animation-play-state:paused}   /* Perf: nur sichtbare Punkte laufen */
 @media (prefers-reduced-motion: reduce){.scan-dot{display:none}}
+
+/* v10: Sensor-Plot-Gruppen unter den kuratierten Serien */
+.charts-ent{margin-top:16px}
+.charts-ent:empty{display:none}
+/* Review-Fix: Offscreen-Gruppen komplett aus Layout/Paint nehmen (~6.500 DOM-Knoten) */
+.charts-ent .chart-group{content-visibility:auto; contain-intrinsic-size:auto 320px}
 
 /* ── v6.1: Verlauf — ALLE Serien, gruppiert nach Gerät/Funktion ── */
 .charts-list{display:flex; flex-direction:column; gap:16px}
