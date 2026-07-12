@@ -171,7 +171,7 @@ function buildPanel(name,h){
       <div class="barlist" id="ble-sources"></div><div class="chips" id="ble-devices" style="margin-top:12px"></div>`;return c;}
   if(name==="solar"){const c=card("wide","sun","Solar · Huawei PV & Speicher","var(--yellow)","EMMA · LUNA2000 · SUN2000");
     $(".cbody",c).innerHTML=`<div class="solar-top">
-      <div class="solar-rings">${bigRing("sol-soc-ring","sol-soc","Batterie SoC")}${bigRing("sol-aut-ring","sol-aut","Autarkie heute")}</div>
+      <div class="solar-rings hero-ring">${bigRing("sol-soc-ring","sol-soc","Batterie SoC")}${bigRing("sol-aut-ring","sol-aut","Autarkie heute")}</div>
       <div class="solar-flow" id="sol-flow"></div></div>
       <div class="solar-day" id="sol-daily"></div>
       <div class="solar-strings" id="sol-strings"></div>

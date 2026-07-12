@@ -439,7 +439,7 @@ body::after{ /* faint grid */
 
 /* ── Solar power-flow ── */
 .solar-top{display:flex; gap:22px; align-items:center; flex-wrap:wrap; margin-bottom:14px}
-.solar-rings{display:flex; gap:16px; flex:none}
+.solar-rings{display:flex; gap:16px; flex:none; margin-bottom:0}   /* trägt zusätzlich .hero-ring (Ring-Styles: fill:none, svg-Größe, .rv zentriert) */
 .solar-flow{display:flex; align-items:stretch; gap:8px; flex:1; min-width:300px; flex-wrap:wrap}
 .sf-node{flex:1; min-width:118px; padding:12px 13px; border-radius:14px; position:relative; overflow:hidden;
   background:linear-gradient(180deg,rgba(24,24,37,.5),rgba(17,17,27,.3)); border:1px solid var(--card-brd);
