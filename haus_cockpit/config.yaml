@@ -1,5 +1,5 @@
 name: HAUS Cockpit (Klipphausen)
-version: "1.2.1"
+version: "1.2.2"
 slug: haus_cockpit
 description: Read-only Ops-Cockpit für Klipphausen — Huawei-Solar, Internet & Sicherheit, ALLE Sensoren (Explorer), Klima, Pi/UDM/BLE. Nur Mikes Haus, schaltet nichts.
 url: https://github.com/robeertm/hass-addons/tree/main/haus_cockpit

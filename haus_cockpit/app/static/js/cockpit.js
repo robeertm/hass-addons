@@ -462,6 +462,7 @@ const CSPEC={
 };
 function specFor(key){
   if(CSPEC[key])return CSPEC[key];
+  if(key.startsWith("snmp.port.")){return {l:"Port "+key.split(".").pop(),u:"Mbit/s",c:COL.sapphire,g:"UDM",d:1};}
   if(key.startsWith("energy.dev.")){return {l:"⚡ "+key.split(".").pop(),u:"W",c:COL.yellow,g:"Energie",d:1};}
   if(key.startsWith("ble.")){const p=key.split(".");
     if(p[2]==="dev")return {l:"BLE "+p[1]+" Geräte",u:"",c:COL.pink,g:"BLE"};
@@ -534,7 +535,8 @@ function drawSpark(canvas,pts,color,grow){
 
 /* ── charts section (per house) ── */
 function chartKeysForHouse(){
-  const keys=Object.keys(histData);
+  // per-port snmp series live only in the SNMP panel/modal, not as chart tiles
+  const keys=Object.keys(histData).filter(k=>!k.startsWith("snmp.port."));
   // also include live metric keys not yet in history (so tiles appear immediately)
   const live=window._last?extractMetrics(window._last.houses.find(h=>h.key===activeHouse)||{}):{};
   Object.keys(live).forEach(k=>{if(!keys.includes(k))keys.push(k);});
@@ -1179,24 +1181,12 @@ function openEntityModal(house,it){
   draw(); wireClose(ov);
 }
 
-/* ── SNMP per-port panel — every port gets a live sparkline ── */
-const snmpHist={};      // "house|port" -> [[epoch, in+out Mbit/s], ...] rolling client buffer
-const snmpLastPush={};  // house -> epoch of last stored sample
+/* ── SNMP per-port panel — sparklines aus der SERVER-History (überlebt Reload) ── */
 function updateSnmp(snmp){
   const host=$("#snmp-ports"); if(!host)return;
   if(!snmp||!snmp.ports||!snmp.ports.length){$("#snmp-sub").textContent="⏳ warte auf SNMP…";return;}
   const ti=snmp.ports.reduce((a,p)=>a+(p.in_mbits||0),0), to=snmp.ports.reduce((a,p)=>a+(p.out_mbits||0),0);
   $("#snmp-sub").textContent=`${snmp.model||"UDM"} · ${snmp.ports.length} Ports · Σ ↓${nf(ti,1)} ↑${nf(to,1)} Mbit/s`;
-  // one history sample per backend poll (dedup by sample epoch)
-  const sampleEp=Math.round(Date.now()/1000-(snmp.age_sec||0)), hk=activeHouse;
-  if(snmpLastPush[hk]==null||sampleEp>snmpLastPush[hk]){
-    snmpLastPush[hk]=sampleEp;
-    snmp.ports.forEach(p=>{
-      const k=hk+"|"+p.name, buf=snmpHist[k]||(snmpHist[k]=[]);
-      buf.push([sampleEp,(p.in_mbits||0)+(p.out_mbits||0)]);
-      if(buf.length>240)buf.shift();
-    });
-  }
   reconcile(host,snmp.ports,p=>p.name,()=>el("div","sp-row"),(n,p)=>{
     const up=p.oper==="up", tot=(p.in_mbits||0)+(p.out_mbits||0);
     if(!n._init){n.innerHTML=`<div class="sp-l"><span class="online-dot"></span><span class="sp-name"></span><span class="vlan sp-speed"></span></div>
@@ -1208,13 +1198,19 @@ function updateSnmp(snmp){
     if(p.speed_mbit){spd.style.display="";spd.textContent=p.speed_mbit>=1000?(p.speed_mbit/1000)+"G":p.speed_mbit+"M";}
     else spd.style.display="none";
     $(".sp-v",n).innerHTML=`<b style="color:var(--sapphire)">↓${nf(p.in_mbits,1)}</b> <b style="color:var(--teal)">↑${nf(p.out_mbits,1)}</b><span class="sp-tot">${nf(tot,1)} Mbit/s</span>`;
-    drawSpark($(".sp-spark",n),snmpHist[hk+"|"+p.name]||[],up?COL.sapphire:"#6c7086",1);
+    // Server-Serie (20s-Sampler) + aktueller Live-Wert als letzter Punkt
+    let ser=(histData["snmp.port."+p.name]||[]).slice();
+    const nowEp=Math.round(Date.now()/1000-(snmp.age_sec||0));
+    if(!ser.length||nowEp>ser[ser.length-1][0])ser.push([nowEp,tot]);
+    drawSpark($(".sp-spark",n),ser,up?COL.sapphire:"#6c7086",1);
   });
 }
-/* SNMP drill-down: summed-rate charts + raw per-port grid */
+/* SNMP drill-down: Summen-Charts + jeder Port als eigener Chart + Rohwerte */
 function openSnmpModal(){
   const h=window._last.houses.find(x=>x.key===activeHouse); if(!h||!h.snmp)return;
-  const keys=chartKeysForHouse().filter(k=>k.startsWith("snmp."));
+  const agg=chartKeysForHouse().filter(k=>k.startsWith("snmp."));
+  const ports=Object.keys(histData).filter(k=>k.startsWith("snmp.port.")).sort();
+  const keys=agg.concat(ports);
   const raw={};
   (h.snmp.ports||[]).forEach(p=>{raw[p.name]={status:p.oper,speed_mbit:p.speed_mbit,in_mbits:p.in_mbits,out_mbits:p.out_mbits};});
   chartModal({icon:"network",title:"UDM Ports · SNMP",sub:`${h.name} · ${h.snmp.model||"UDM"} · ${h.snmp.host||""}`,

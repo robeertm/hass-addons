@@ -78,6 +78,10 @@ def extract_metrics(house):
         m["snmp.in_mbits"] = round(sum(p.get("in_mbits") or 0 for p in ports), 2)
         m["snmp.out_mbits"] = round(sum(p.get("out_mbits") or 0 for p in ports), 2)
         m["snmp.ports_up"] = sum(1 for p in ports if p.get("oper") == "up")
+        # per-port total rate → server-side history (panel sparklines survive reloads)
+        for p in ports:
+            if p.get("name"):
+                m[f"snmp.port.{p['name']}"] = round((p.get("in_mbits") or 0) + (p.get("out_mbits") or 0), 2)
     return m
 
 
