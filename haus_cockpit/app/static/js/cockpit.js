@@ -609,6 +609,12 @@ function drawBigChart(canvas,pts,color,tipEl){
   (function loop(){render(canvas._hoverX);modalRAF=requestAnimationFrame(loop);})();
   canvas.onmousemove=ev=>{const r=canvas.getBoundingClientRect();canvas._hoverX=ev.clientX-r.left;};
   canvas.onmouseleave=()=>{canvas._hoverX=null;};
+  // Touch-Scrubbing (Crosshair mit dem Finger ziehen; vertikal scrollt weiter via touch-action:pan-y)
+  canvas.ontouchstart=canvas.ontouchmove=ev=>{
+    const t=ev.touches&&ev.touches[0]; if(!t)return;
+    const r=canvas.getBoundingClientRect(); canvas._hoverX=t.clientX-r.left;
+  };
+  canvas.ontouchend=canvas.ontouchcancel=()=>{setTimeout(()=>{canvas._hoverX=null;},1200);};
 }
 
 /* ── drill-down modal ── */
@@ -686,8 +692,9 @@ function openServiceModal(svc){
   $(".modal-close",ov).onclick=close;ov.onclick=e=>{if(e.target===ov)close();};
 }
 
-/* ── 3D tilt + glare (delegated) ── */
+/* ── 3D tilt + glare (delegated) — nur für echte Pointer, nicht Touch ── */
 function initTilt(){
+  if(matchMedia("(pointer: coarse)").matches)return;
   const host=$("#views");
   host.addEventListener("mousemove",e=>{
     const card=e.target.closest(".card");if(!card)return;
@@ -704,6 +711,7 @@ function initTilt(){
 /* ── particle constellation background ── */
 function initParticles(){
   if(matchMedia("(prefers-reduced-motion: reduce)").matches)return;
+  if(matchMedia("(pointer: coarse)").matches||innerWidth<820)return;  // Akku/GPU auf Mobilgeräten schonen
   const cv=document.createElement("canvas");cv.id="bg-particles";document.body.appendChild(cv);
   const ctx=cv.getContext("2d");let W,H,parts=[];const dpr=Math.min(window.devicePixelRatio||1,1.5);
   function resize(){W=cv.width=innerWidth*dpr;H=cv.height=innerHeight*dpr;cv.style.width=innerWidth+"px";cv.style.height=innerHeight+"px";
