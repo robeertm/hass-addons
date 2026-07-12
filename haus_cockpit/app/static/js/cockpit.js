@@ -227,8 +227,8 @@ function renderHouse(host,h){
     const cs=el("section");
     cs.innerHTML=`<div class="sec-title"><div class="st-ic">${SVGICON("chip")}</div>
       <h2>Verlauf · History</h2><div class="st-line"></div>
-      <span class="st-badge">Klick für Detail · 6 h</span></div>
-      <div class="charts-grid" id="charts-host"></div>`;
+      <span class="st-badge">ALLE Serien · gruppiert · Klick für Detail</span></div>
+      <div class="charts-list" id="charts-host"></div>`;
     host.appendChild(cs);
     host._built=true;
   }
@@ -456,20 +456,23 @@ const CSPEC={
   "sec.host_count":{l:"Aktive Hosts",u:"",c:COL.sky,g:"Sicherheit"},
   "sec.v6_share":{l:"IPv6-Anteil",u:"%",c:COL.mauve,g:"Sicherheit",d:1},
   "sec.nd_block_pct":{l:"NextDNS blockiert",u:"%",c:COL.red,g:"Sicherheit",d:1},
-  "snmp.in_mbits":{l:"Ports ↓ Summe",u:"Mbit/s",c:COL.sapphire,g:"UDM",d:1},
-  "snmp.out_mbits":{l:"Ports ↑ Summe",u:"Mbit/s",c:COL.teal,g:"UDM",d:1},
-  "snmp.ports_up":{l:"Ports aktiv",u:"",c:COL.green,g:"UDM"},
+  "snmp.in_mbits":{l:"Ports ↓ Summe",u:"Mbit/s",c:COL.sapphire,g:"Ports",d:1},
+  "snmp.out_mbits":{l:"Ports ↑ Summe",u:"Mbit/s",c:COL.teal,g:"Ports",d:1},
+  "snmp.ports_up":{l:"Ports aktiv",u:"",c:COL.green,g:"Ports"},
 };
 function specFor(key){
   if(CSPEC[key])return CSPEC[key];
-  if(key.startsWith("snmp.port.")){return {l:"Port "+key.split(".").pop(),u:"Mbit/s",c:COL.sapphire,g:"UDM",d:1};}
+  if(key.startsWith("snmp.port.")){return {l:"Port "+key.split(".").pop(),u:"Mbit/s",c:COL.sapphire,g:"Ports",d:1};}
   if(key.startsWith("energy.dev.")){return {l:"⚡ "+key.split(".").pop(),u:"W",c:COL.yellow,g:"Energie",d:1};}
   if(key.startsWith("ble.")){const p=key.split(".");
     if(p[2]==="dev")return {l:"BLE "+p[1]+" Geräte",u:"",c:COL.pink,g:"BLE"};
     return {l:"BLE "+p[1]+" RSSI",u:"dBm",c:COL.mauve,g:"BLE",d:0};}
   return {l:key,u:"",c:COL.blue,g:"Sonstige"};
 }
-const GORDER=["Solar","Energie","Sicherheit","Pi","UDM","Netzwerk","BLE","Sonstige"];
+const GORDER=["Solar","Energie","Sicherheit","Pi","UDM","Ports","Netzwerk","BLE","Sonstige"];
+const GLABEL={Solar:"☀️ Solar",Energie:"⚡ Energie",Sicherheit:"🌐 Internet & Sicherheit",
+  Pi:"🖥️ Raspberry Pi",UDM:"🛡️ UDM Pro SE",Ports:"🔌 UDM Ports · SNMP",
+  Netzwerk:"📡 Netzwerk",BLE:"📶 BLE-Mesh",Sonstige:"Sonstige"};
 
 /* client mirror of backend extract_metrics → live current values (4s) */
 function extractMetrics(h){
@@ -535,20 +538,15 @@ function drawSpark(canvas,pts,color,grow){
 
 /* ── charts section (per house) ── */
 function chartKeysForHouse(){
-  // per-port snmp series live only in the SNMP panel/modal, not as chart tiles
-  const keys=Object.keys(histData).filter(k=>!k.startsWith("snmp.port."));
+  const keys=Object.keys(histData);
   // also include live metric keys not yet in history (so tiles appear immediately)
   const live=window._last?extractMetrics(window._last.houses.find(h=>h.key===activeHouse)||{}):{};
   Object.keys(live).forEach(k=>{if(!keys.includes(k))keys.push(k);});
   keys.sort((a,b)=>{const ga=GORDER.indexOf(specFor(a).g),gb=GORDER.indexOf(specFor(b).g);return ga-gb||a.localeCompare(b);});
   return keys;
 }
-function updateCharts(d){
-  const host=$("#charts-host"); if(!host)return;
-  const h=d.houses.find(x=>x.key===activeHouse); if(!h)return;
-  const live=extractMetrics(h);
-  const keys=chartKeysForHouse();
-  reconcile(host,keys,k=>k,
+function renderTiles(grid,keys,live){
+  reconcile(grid,keys,k=>k,
     (k)=>{const sp=specFor(k);const t=el("div","chart-tile clickable");
       t.innerHTML=`<div class="cth"><span class="ctname">${sp.l}</span><span class="ctval" data-val="0">–</span></div>
         <canvas></canvas><div class="cth" style="margin-top:3px"><span class="ctsub">6 h</span><span class="ctrend flat" style="margin-left:auto">–</span></div>`;
@@ -558,7 +556,7 @@ function updateCharts(d){
       const cv=live[k]!=null?live[k]:(ser.length?ser[ser.length-1][1]:null);
       const vnode=$(".ctval",t);vnode.style.color=sp.c;
       if(cv!=null)countUp(vnode,cv,sp.d||0,sp.u?(" "+sp.u):"");else vnode.textContent="–";
-      const cv2=drawSpark($("canvas",t),ser,sp.c, t._drawn?1:undefined);t._drawn=true;
+      drawSpark($("canvas",t),ser,sp.c, t._drawn?1:undefined);t._drawn=true;
       // trend
       const tr=$(".ctrend",t);
       if(ser.length>2){const first=ser[0][1],last=ser[ser.length-1][1],dp=first!==0?((last-first)/Math.abs(first)*100):0;
@@ -566,6 +564,23 @@ function updateCharts(d){
         tr.textContent=(dp>0?"▲":dp<0?"▼":"→")+" "+nf(Math.abs(dp),0)+"%";}
       else{tr.className="ctrend flat";tr.textContent="sammle…";}
     });
+}
+function updateCharts(d){
+  const host=$("#charts-host"); if(!host)return;
+  const h=d.houses.find(x=>x.key===activeHouse); if(!h)return;
+  const live=extractMetrics(h);
+  // ALLE Serien, gruppiert nach Gerät/Funktion
+  const byg={};
+  chartKeysForHouse().forEach(k=>{const g=specFor(k).g||"Sonstige";(byg[g]||(byg[g]=[])).push(k);});
+  const groups=GORDER.filter(g=>byg[g]);
+  Object.keys(byg).forEach(g=>{if(!groups.includes(g))groups.push(g);});
+  reconcile(host,groups,g=>g,
+    ()=>{const s=el("div","chart-group");
+      s.innerHTML=`<div class="cg-head"><span class="cg-name"></span><span class="cg-n"></span><span class="cg-line"></span></div>
+        <div class="charts-grid"></div>`;
+      return s;},
+    (s,g)=>{$(".cg-name",s).textContent=GLABEL[g]||g;$(".cg-n",s).textContent=byg[g].length;
+      renderTiles($(".charts-grid",s),byg[g],live);});
 }
 
 /* ── big chart (modal) with hover + animated pulse ── */
@@ -736,13 +751,17 @@ function initParticles(){
    v3 — Solar · Internet & Security · exhaustive sensor explorer
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* group → modal dispatcher (charts route here) */
+/* group → modal dispatcher (charts route here) — jede Gruppe zu IHREM Modal */
 function openGroupModal(g,focusKey){
-  g=(g||"").toLowerCase();
-  if(g==="solar")return openSolarModal(focusKey);
-  if(g==="sicherheit")return openSecurityModal(focusKey);
+  const gl=(g||"").toLowerCase();
+  if(gl==="solar")return openSolarModal(focusKey);
+  if(gl==="sicherheit")return openSecurityModal(focusKey);
+  if(gl==="ports")return openSnmpModal(focusKey);
   const map={pi:"pi",udm:"udm",energie:"energy",netzwerk:"network",ble:"ble"};
-  openModal(map[g]||"pi",focusKey);
+  if(map[gl])return openModal(map[gl],focusKey);
+  // unbekannte Gruppe: generischer Chart-Modal mit den Keys DIESER Gruppe (nie mehr fälschlich Pi)
+  const keys=chartKeysForHouse().filter(k=>(specFor(k).g||"Sonstige")===g);
+  chartModal({icon:"chip",title:GLABEL[g]||g||"Verlauf",sub:"",accent:"var(--mauve)",keys,focusKey});
 }
 
 /* ── Solar panel ─────────────────────────────────────────────────────────── */
@@ -1214,15 +1233,15 @@ function updateSnmp(snmp){
   });
 }
 /* SNMP drill-down: Summen-Charts + jeder Port als eigener Chart + Rohwerte */
-function openSnmpModal(){
+function openSnmpModal(focusKey){
   const h=window._last.houses.find(x=>x.key===activeHouse); if(!h||!h.snmp)return;
-  const agg=chartKeysForHouse().filter(k=>k.startsWith("snmp."));
-  const ports=Object.keys(histData).filter(k=>k.startsWith("snmp.port.")).sort();
+  const agg=chartKeysForHouse().filter(k=>k.startsWith("snmp.")&&!k.startsWith("snmp.port."));
+  const ports=chartKeysForHouse().filter(k=>k.startsWith("snmp.port.")).sort();
   const keys=agg.concat(ports);
   const raw={};
   (h.snmp.ports||[]).forEach(p=>{raw[p.name]={status:p.oper,speed_mbit:p.speed_mbit,in_mbits:p.in_mbits,out_mbits:p.out_mbits};});
   chartModal({icon:"network",title:"UDM Ports · SNMP",sub:`${h.name} · ${h.snmp.model||"UDM"} · ${h.snmp.host||""}`,
-    accent:"var(--sapphire)",keys,raw,rawTitle:"Alle Ports (live)"});
+    accent:"var(--sapphire)",keys,focusKey,raw,rawTitle:"Alle Ports (live)"});
 }
 
 /* ── v2/v3/v4 init ── */

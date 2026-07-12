@@ -159,6 +159,10 @@ HIST_SAMPLE_SEC = int(os.environ.get("HIST_SAMPLE_SEC", "20"))     # live sample
 HIST_MAXLEN = int(os.environ.get("HIST_MAXLEN", "1200"))          # ~6.6h at 20s
 HIST_BACKFILL_HOURS = int(os.environ.get("HIST_BACKFILL_HOURS", "6"))
 HIST_TRANSPORT_CAP = int(os.environ.get("HIST_TRANSPORT_CAP", "360"))
+# Persistenz: Ringpuffer überleben Container-Restarts. /data = HAOS-Add-on-Datadir
+# bzw. Robert-Compose-Volume ./data:/data. Leer setzen = aus.
+HIST_PERSIST_PATH = os.environ.get("HIST_PERSIST_PATH", "/data/history.json.gz")
+HIST_SAVE_SEC = int(os.environ.get("HIST_SAVE_SEC", "300"))   # Mike=SD-Karte: nicht zu oft schreiben
 
 # Robert-side chart metric → HA recorder entity_id (instant-full charts)
 CHART_HA_ENTITIES = {

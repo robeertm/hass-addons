@@ -5,6 +5,9 @@ per-(house, metric) ring buffers. Robert's buffers are additionally *backfilled*
 from Home Assistant's recorder on startup so the charts are full immediately
 (Mike's fill live — the Pi can't reach Mike's HA recorder).
 """
+import atexit
+import gzip
+import os
 import threading
 import time
 import json
@@ -126,8 +129,13 @@ class HistoryStore:
                 self.add(h["key"], key, now, val)
 
     def _loop(self):
+        last_save = time.time()
         while True:
             self.sample_once()
+            if getattr(config, "HIST_PERSIST_PATH", "") and \
+               time.time() - last_save >= getattr(config, "HIST_SAVE_SEC", 300):
+                self.save()
+                last_save = time.time()   # fail-soft: bei Fehler nicht alle 20s spammen
             time.sleep(self.sample_sec)
 
     def start(self, state_fn, ha_sources=None):
@@ -135,7 +143,9 @@ class HistoryStore:
         if self._started:
             return
         self._started = True
-        # backfill both houses from their HA recorders (best effort), then sample live
+        # 1) restore persisted buffers (Container-Restart überleben), 2) HA-backfill
+        #    füllt danach nur die Lücke (add() hält Epochen monoton), 3) live sampeln.
+        self._load()
         houses = {h["key"] for h in config.HOUSES}
         if "radeberg" in houses:
             self._safe_backfill("radeberg", config.HA_URL, config.HA_TOKEN,
@@ -144,6 +154,48 @@ class HistoryStore:
             self._safe_backfill("klipphausen", config.MIKE_HA_URL, config.MIKE_HA_TOKEN,
                                 config.CHART_HA_ENTITIES_MIKE)
         threading.Thread(target=self._loop, daemon=True).start()
+        atexit.register(self.save)
+
+    # ── persistence: Ringpuffer auf Platte, damit Restarts nichts löschen ────
+    def save(self, path=None):
+        path = path or getattr(config, "HIST_PERSIST_PATH", "")
+        if not path:
+            return False
+        try:
+            with self._lock:
+                snap = {f"{h}\t{k}": list(dq) for (h, k), dq in self._buf.items()}
+            tmp = path + ".tmp"
+            with gzip.open(tmp, "wt", compresslevel=6) as f:
+                json.dump(snap, f)
+            os.replace(tmp, path)
+            return True
+        except Exception as e:
+            print(f"[history] save {path} failed: {e}", flush=True)
+            return False
+
+    def _load(self, path=None):
+        path = path or getattr(config, "HIST_PERSIST_PATH", "")
+        if not path or not os.path.exists(path):
+            return 0
+        try:
+            with gzip.open(path, "rt") as f:
+                snap = json.load(f)
+        except Exception as e:
+            print(f"[history] load {path} failed: {e}", flush=True)
+            return 0
+        n = 0
+        for hk, pts in snap.items():
+            h, _, k = hk.partition("\t")
+            if not k:
+                continue
+            for pt in pts:
+                try:
+                    self.add(h, k, float(pt[0]), float(pt[1]))
+                    n += 1
+                except (TypeError, ValueError, IndexError):
+                    continue
+        print(f"[history] restored {n} pts / {len(snap)} series from {path}", flush=True)
+        return n
 
     def _safe_backfill(self, house, url, token, mapping):
         try:

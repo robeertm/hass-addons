@@ -771,6 +771,14 @@ body::after{ /* faint grid */
   .foot{font-size:.56rem}
 }
 
+/* ── v6.1: Verlauf — ALLE Serien, gruppiert nach Gerät/Funktion ── */
+.charts-list{display:flex; flex-direction:column; gap:16px}
+.cg-head{display:flex; align-items:center; gap:9px; margin:0 2px 9px}
+.cg-name{font-size:.72rem; letter-spacing:.1em; text-transform:uppercase; color:var(--subtext1); font-weight:700}
+.cg-n{font-family:var(--mono); font-size:.6rem; padding:1px 7px; border-radius:6px;
+  background:rgba(180,190,254,.1); color:var(--subtext0)}
+.cg-line{flex:1; height:1px; background:linear-gradient(90deg,var(--card-brd),transparent)}
+
 /* ── Modals = Vollbild-Sheets auf dem Handy ── */
 @media(max-width:720px){
   .modal-overlay{padding:0; align-items:stretch; justify-content:stretch}
