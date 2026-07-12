@@ -773,6 +773,17 @@ body::after{ /* faint grid */
   .foot{font-size:.56rem}
 }
 
+/* ── v9: wandernder Puls-Punkt in JEDEM Plot (folgt der Kurve per offset-path) ── */
+.scan-dot{position:absolute; width:5px; height:5px; border-radius:50%; pointer-events:none; z-index:2;
+  offset-rotate:0deg;
+  box-shadow:0 0 6px currentColor, 0 0 13px currentColor;
+  animation:scanMove 4s linear infinite, scanPulse 1s ease-in-out infinite}
+@keyframes scanMove{from{offset-distance:0%}to{offset-distance:100%}}
+@keyframes scanPulse{0%,100%{transform:scale(.7);opacity:.6}50%{transform:scale(1.3);opacity:1}}
+.sp-row{position:relative}          /* Anker für den Punkt in SNMP-Reihen */
+.si{position:relative}              /* … und in Explorer-Reihen */
+@media (prefers-reduced-motion: reduce){.scan-dot{display:none}}
+
 /* ── v6.1: Verlauf — ALLE Serien, gruppiert nach Gerät/Funktion ── */
 .charts-list{display:flex; flex-direction:column; gap:16px}
 .cg-head{display:flex; align-items:center; gap:9px; margin:0 2px 9px}

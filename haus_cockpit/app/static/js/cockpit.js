@@ -513,12 +513,26 @@ async function fetchHistory(house){
 function hex(c,a){ // append alpha to #rrggbb
   const n=Math.round(clamp(a,0,1)*255).toString(16).padStart(2,"0"); return c+n;
 }
+/* wandernder Puls-Punkt: DOM-Overlay folgt der Kurvenlinie per CSS offset-path
+   (GPU-Animation statt Canvas-Redraw — skaliert auf ~100 Plots + Mobile) */
+function ensureScanDot(canvas,pathStr,color){
+  try{
+    const parent=canvas.parentElement||canvas.parentNode;
+    if(!parent||!parent.appendChild)return;
+    let d=canvas._scan;
+    if(!d||!d.isConnected){d=document.createElement("span");d.className="scan-dot";parent.appendChild(d);canvas._scan=d;}
+    d.style.left=(canvas.offsetLeft||0)+"px"; d.style.top=(canvas.offsetTop||0)+"px";
+    d.style.offsetPath=`path("${pathStr}")`;
+    d.style.background=color; d.style.color=color;   // currentColor → Glow
+  }catch(e){}
+}
 function drawSpark(canvas,pts,color,grow){
   const dpr=Math.min(window.devicePixelRatio||1,2);
   const w=canvas.clientWidth||200,h=canvas.clientHeight||60;
   canvas.width=w*dpr;canvas.height=h*dpr;
   const ctx=canvas.getContext("2d");ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
-  if(!pts||pts.length<2){ctx.strokeStyle=hex(color,.25);ctx.beginPath();ctx.moveTo(4,h/2);ctx.lineTo(w-4,h/2);ctx.stroke();return;}
+  if(!pts||pts.length<2){ctx.strokeStyle=hex(color,.25);ctx.beginPath();ctx.moveTo(4,h/2);ctx.lineTo(w-4,h/2);ctx.stroke();
+    ensureScanDot(canvas,`M4 ${(h/2).toFixed(1)} L${(w-4).toFixed(1)} ${(h/2).toFixed(1)}`,color);return;}
   const g=grow==null?1:grow;
   const N=Math.max(2,Math.floor(pts.length*g));
   const use=pts.slice(0,N);
@@ -534,6 +548,10 @@ function drawSpark(canvas,pts,color,grow){
   const lx=X(xs[xs.length-1]),ly=Y(ys[ys.length-1]);
   ctx.beginPath();ctx.arc(lx,ly,3,0,7);ctx.fillStyle=color;ctx.shadowColor=color;ctx.shadowBlur=10;ctx.fill();ctx.shadowBlur=0;
   ctx.beginPath();ctx.arc(lx,ly,5.5,0,7);ctx.strokeStyle=hex(color,.4);ctx.lineWidth=1;ctx.stroke();
+  // Scan-Punkt entlang der Kurve
+  let sp="M"+X(xs[0]).toFixed(1)+" "+Y(ys[0]).toFixed(1);
+  for(let i=1;i<use.length;i++)sp+=" L"+X(xs[i]).toFixed(1)+" "+Y(ys[i]).toFixed(1);
+  ensureScanDot(canvas,sp,color);
 }
 
 /* ── charts section (per house) ── */
@@ -604,6 +622,12 @@ function drawBigChart(canvas,pts,color,tipEl){
     ctx.lineTo(X(xs[xs.length-1]),h-padB);ctx.lineTo(X(xs[0]),h-padB);ctx.closePath();ctx.fillStyle=grd;ctx.fill();
     ctx.beginPath();ctx.moveTo(X(xs[0]),Y(ys[0]));for(let i=1;i<pts.length;i++)ctx.lineTo(X(xs[i]),Y(ys[i]));
     ctx.strokeStyle=color;ctx.lineWidth=2;ctx.lineJoin="round";ctx.shadowColor=color;ctx.shadowBlur=9;ctx.stroke();ctx.shadowBlur=0;
+    // Scan-Punkt entlang der Kurve (Pfad nur bei Datenwechsel neu bauen, nicht pro Frame)
+    if(canvas._scanPts!==pts){canvas._scanPts=pts;
+      let sp="M"+X(xs[0]).toFixed(1)+" "+Y(ys[0]).toFixed(1);
+      for(let i=1;i<pts.length;i++)sp+=" L"+X(xs[i]).toFixed(1)+" "+Y(ys[i]).toFixed(1);
+      ensureScanDot(canvas,sp,color);
+    }
     // pulsing endpoint
     const lx=X(xs[xs.length-1]),ly=Y(ys[ys.length-1]);const t=(Date.now()%2000)/2000,pr=3+Math.sin(t*6.283)*1.5;
     ctx.beginPath();ctx.arc(lx,ly,pr+5,0,7);ctx.fillStyle=hex(color,.15);ctx.fill();
