@@ -1,5 +1,5 @@
 name: Flow Collector (IPFIX/GeoIP)
-version: "1.1.0"
+version: "1.2.0"
 slug: flow_collector
 description: IPFIX/NetFlow-v10-Collector mit GeoIP — per-Gerät-Traffic, Top-Länder/Dienste/Hosts, VLANs. Speist das HAUS-Cockpit-Security-Panel (:3002/api/state). Read-only.
 url: https://github.com/robeertm/hass-addons/tree/main/flow_collector

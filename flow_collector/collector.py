@@ -473,7 +473,9 @@ class DeviceStat:
     zeroed, identity kept) so MQTT sensors stay stable."""
     __slots__ = ("mac","name","vlan_name","vlan_from_v4",
                  "sent_v4","rcvd_v4","sent_v6","rcvd_v6","flows",
-                 "ips_v4","ips_v6","first_seen","last_seen")
+                 "ips_v4","ips_v6","first_seen","last_seen",
+                 "_rt_snap_up","_rt_snap_dn","_rt_snap_ts",
+                 "rate_up_mbps","rate_dn_mbps")
 
     def __init__(self, mac: str):
         self.mac = mac
@@ -487,6 +489,31 @@ class DeviceStat:
         self.ips_v6: set = set()
         self.first_seen = time.time()
         self.last_seen = time.time()
+        # live throughput: delta of cumulative up/down bytes between publish
+        # cycles (~MQTT_PUBLISH_SEC) -> average Mbit/s. up=sent, down=rcvd.
+        self._rt_snap_up = 0
+        self._rt_snap_dn = 0
+        self._rt_snap_ts = time.time()
+        self.rate_up_mbps = 0.0
+        self.rate_dn_mbps = 0.0
+
+    def update_rate(self, now: float):
+        """Compute avg Mbit/s (up=sent, down=rcvd) since last call from the
+        cumulative byte counters. Guards the midnight reset (counters drop)."""
+        up_bytes = self.sent_v4 + self.sent_v6
+        dn_bytes = self.rcvd_v4 + self.rcvd_v6
+        dt = now - self._rt_snap_ts
+        d_up = up_bytes - self._rt_snap_up
+        d_dn = dn_bytes - self._rt_snap_dn
+        if dt >= 1 and d_up >= 0 and d_dn >= 0:
+            self.rate_up_mbps = round(d_up * 8 / dt / 1e6, 2)
+            self.rate_dn_mbps = round(d_dn * 8 / dt / 1e6, 2)
+        else:                       # first cycle or after daily reset -> re-baseline
+            self.rate_up_mbps = 0.0
+            self.rate_dn_mbps = 0.0
+        self._rt_snap_up = up_bytes
+        self._rt_snap_dn = dn_bytes
+        self._rt_snap_ts = now
 
     def total(self) -> int:
         return self.sent_v4 + self.rcvd_v4 + self.sent_v6 + self.rcvd_v6
@@ -1120,12 +1147,15 @@ def mqtt_loop(state: State):
             v4mb = d.total_v4() / 1e6
             v6mb = d.total_v6() / 1e6
             tot  = v4mb + v6mb
+            d.update_rate(time.time())
             attrs = {
                 "ipv4": "v4 " + _fmt_mb(v4mb),
                 "ipv6": "v6 " + _fmt_mb(v6mb),
                 "ipv4_mb": round(v4mb, 1),
                 "ipv6_mb": round(v6mb, 1),
                 "v6_share": round(v6mb / tot * 100, 1) if tot else 0.0,
+                "rate_dn_mbps": d.rate_dn_mbps,
+                "rate_up_mbps": d.rate_up_mbps,
                 "ip": sorted(d.ips_v4)[0] if d.ips_v4 else "",
                 "v6_adressen": len(d.ips_v6),
                 "vlan": d.vlan_name or "?",
@@ -1332,6 +1362,8 @@ class HTTPHandler(BaseHTTPRequestHandler):
                         "mb_v4": round(d.total_v4() / 1e6, 1),
                         "mb_v6": round(d.total_v6() / 1e6, 1),
                         "mb_total": round(d.total() / 1e6, 1),
+                        "rate_dn_mbps": d.rate_dn_mbps,
+                        "rate_up_mbps": d.rate_up_mbps,
                         "last_seen": int(d.last_seen)} for d in devs]
             payload = json.dumps({"count": len(out),
                                   "miss": self.state.device_miss,
